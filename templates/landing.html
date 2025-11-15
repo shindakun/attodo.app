@@ -1,0 +1,62 @@
+{{define "landing.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to AT Todo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+    <style>
+        .container {
+            max-width: 800px;
+        }
+    </style>
+</head>
+<body>
+    <header class="container">
+        <nav>
+            <ul>
+                <li><strong>AT Todo</strong></li>
+            </ul>
+        </nav>
+    </header>
+    <main class="container">
+        <section>
+            <hgroup>
+                <p>A decentralized todo app powered by the AT Protocol</p>
+            </hgroup>
+
+            <article>
+                <h2>Get Started</h2>
+                <p>Manage your tasks on the AT Protocol. Your data, your control.</p>
+
+                <form action="/login" method="get">
+                    <label for="handle">
+                        Enter your Bluesky handle:
+                        <input
+                            type="text"
+                            name="handle"
+                            id="handle"
+                            placeholder="alice.bsky.social"
+                            required
+                        >
+                    </label>
+                    <button type="submit">Login with Bluesky</button>
+                </form>
+            </article>
+
+            <article>
+                <h3>Features</h3>
+                <ul>
+                    <li>Create and manage tasks</li>
+                    <li>Store data in your AT Protocol repository</li>
+                    <li>Own your data completely</li>
+                    <li>Simple, clean interface</li>
+                </ul>
+            </article>
+        </section>
+    </main>
+</body>
+</html>
+{{end}}

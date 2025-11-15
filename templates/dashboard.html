@@ -1,0 +1,90 @@
+{{define "dashboard.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - AT Todo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+    <style>
+        .container {
+            max-width: 800px;
+        }
+        .task-item {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+        }
+        .task-item.completed {
+            opacity: 0.6;
+        }
+        .task-item h4 {
+            margin: 0 0 0.5rem 0;
+        }
+        .task-item.completed h4 {
+            text-decoration: line-through;
+        }
+        .task-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .task-actions button {
+            padding: 0.25rem 0.75rem;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <header class="container">
+        <nav>
+            <ul>
+                <li><strong>AT Todo</strong></li>
+            </ul>
+            <ul>
+                <li><a href="/logout">Logout</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="container">
+        <section>
+            <hgroup>
+                <h1>My Tasks</h1>
+                <p>Manage your todo list</p>
+            </hgroup>
+
+            <!-- Add Task Form -->
+            <article>
+                <h3>Add New Task</h3>
+                <form
+                    hx-post="/app/tasks"
+                    hx-target="#task-list"
+                    hx-swap="afterbegin"
+                    hx-on::after-request="this.reset()"
+                >
+                    <label for="title">
+                        Title
+                        <input type="text" name="title" id="title" required>
+                    </label>
+
+                    <label for="description">
+                        Description (optional)
+                        <textarea name="description" id="description" rows="3"></textarea>
+                    </label>
+
+                    <button type="submit">Add Task</button>
+                </form>
+            </article>
+
+            <!-- Task List -->
+            <div id="task-list" hx-get="/app/tasks" hx-trigger="load" hx-swap="innerHTML">
+                <!-- Tasks will be loaded here -->
+            </div>
+        </section>
+    </main>
+</body>
+</html>
+{{end}}

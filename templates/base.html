@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{block "title" .}}AT Todo{{end}}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        .task-item {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+        }
+        .task-item.completed {
+            opacity: 0.6;
+        }
+        .task-item h4 {
+            margin: 0 0 0.5rem 0;
+        }
+        .task-item.completed h4 {
+            text-decoration: line-through;
+        }
+        .task-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .task-actions button {
+            padding: 0.25rem 0.75rem;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <header class="container">
+        <nav>
+            <ul>
+                <li><strong>AT Todo</strong></li>
+            </ul>
+            <ul>
+                {{block "nav" .}}{{end}}
+            </ul>
+        </nav>
+    </header>
+
+    <main class="container">
+        {{block "content" .}}{{end}}
+    </main>
+</body>
+</html>

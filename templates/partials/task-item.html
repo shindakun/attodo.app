@@ -1,0 +1,31 @@
+{{define "task-item.html"}}
+<div class="task-item {{if .Completed}}completed{{end}}" id="task-{{.RKey}}">
+    <h4>{{.Title}}</h4>
+    {{if .Description}}
+    <p>{{.Description}}</p>
+    {{end}}
+    <small>Created: {{formatDate .CreatedAt}}</small>
+    {{if .CompletedAt}}
+    <small> • Completed: {{formatDate .CompletedAt}}</small>
+    {{end}}
+
+    <div class="task-actions">
+        <button
+            hx-put="/app/tasks"
+            hx-vals='{"rkey": "{{.RKey}}"}'
+            hx-target="#task-{{.RKey}}"
+            hx-swap="outerHTML"
+        >
+            {{if .Completed}}Mark Incomplete{{else}}Mark Complete{{end}}
+        </button>
+        <button
+            hx-delete="/app/tasks?rkey={{.RKey}}"
+            hx-target="#task-{{.RKey}}"
+            hx-swap="outerHTML"
+            hx-confirm="Are you sure you want to delete this task?"
+        >
+            Delete
+        </button>
+    </div>
+</div>
+{{end}}
