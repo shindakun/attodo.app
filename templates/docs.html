@@ -1,0 +1,120 @@
+{{define "docs.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{.DocTitle}} - AT Todo Documentation">
+    <title>{{.DocTitle}} - AT Todo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+    <meta name="theme-color" content="#1e88e5">
+    <style>
+        .container {
+            max-width: 800px;
+        }
+        .docs-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .docs-container h1 {
+            margin-bottom: 1rem;
+        }
+        .docs-container h2 {
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        .docs-container h3 {
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .docs-container p {
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+        .docs-container ul, .docs-container ol {
+            margin-bottom: 1rem;
+            padding-left: 2rem;
+        }
+        .docs-container li {
+            margin-bottom: 0.5rem;
+        }
+        .docs-container code {
+            background-color: var(--pico-code-background-color);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .docs-container pre {
+            background-color: var(--pico-code-background-color);
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+        .docs-container pre code {
+            padding: 0;
+            background-color: transparent;
+        }
+        .docs-container a {
+            color: var(--pico-primary);
+            text-decoration: none;
+        }
+        .docs-container a:hover {
+            text-decoration: underline;
+        }
+        .docs-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+        .docs-container table {
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        .docs-container blockquote {
+            border-left: 4px solid var(--pico-primary);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <header class="container">
+        <nav>
+            <ul>
+                <li><strong>AT Todo</strong></li>
+            </ul>
+            <ul>
+                {{if .Avatar}}
+                <li><a href="/app">Dashboard</a></li>
+                <li><a href="/logout">Logout</a></li>
+                {{else}}
+                <li><a href="/">Home</a></li>
+                {{end}}
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <div class="docs-container">
+            {{.DocContent}}
+        </div>
+    </main>
+
+    <footer class="container">
+        <p style="text-align: center; color: var(--pico-muted-color); font-size: 0.875rem;">
+            Made with ❤ in PDX!
+        </p>
+        <p class="version-info" style="text-align: center; color: var(--pico-muted-color); font-size: 0.75rem;">
+            {{getVersion}}-{{getCommitID}}
+        </p>
+    </footer>
+</body>
+</html>
+{{end}}

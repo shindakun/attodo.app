@@ -47,6 +47,9 @@
             <ul>
                 <li><strong>AT Todo</strong></li>
             </ul>
+            <ul>
+                <li><a href="/docs">Docs</a></li>
+            </ul>
         </nav>
     </header>
     <main class="container">
@@ -85,6 +88,15 @@
             </article>
         </section>
     </main>
+
+    <footer class="container">
+        <p style="text-align: center; color: var(--pico-muted-color); font-size: 0.875rem;">
+            Made with ❤ in PDX!
+        </p>
+        <p class="version-info" style="text-align: center; color: var(--pico-muted-color); font-size: 0.75rem;">
+            {{getVersion}}-{{getCommitID}}
+        </p>
+    </footer>
 </body>
 </html>
 {{end}}

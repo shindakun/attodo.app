@@ -42,6 +42,11 @@ func main() {
 	mux.HandleFunc("/callback", authHandler.Client().CallbackHandler(authHandler.CallbackSuccess))
 	mux.HandleFunc("/logout", authHandler.Logout)
 
+	// Documentation routes
+	mux.HandleFunc("/docs", handlers.Docs)
+	mux.HandleFunc("/docs/", handlers.DocsPage)
+	mux.HandleFunc("/docs/images/", handlers.DocsImage)
+
 	// Protected routes
 	mux.Handle("/app", authMiddleware.RequireAuth(http.HandlerFunc(handleDashboard)))
 	mux.Handle("/app/tasks", authMiddleware.RequireAuth(http.HandlerFunc(taskHandler.HandleTasks)))

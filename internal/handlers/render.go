@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/shindakun/attodo/internal/version"
 )
 
 var templates *template.Template
@@ -23,6 +25,12 @@ func InitTemplates() error {
 			default:
 				return ""
 			}
+		},
+		"getVersion": func() string {
+			return version.GetVersion()
+		},
+		"getCommitID": func() string {
+			return version.GetCommitID()
 		},
 	}
 
