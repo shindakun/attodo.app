@@ -18,7 +18,7 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 	client := bskyoauth.NewClientWithOptions(bskyoauth.ClientOptions{
 		BaseURL:    cfg.BaseURL,
 		ClientName: cfg.ClientName,
-		Scopes:     []string{"atproto", "repo:app.bsky.feed.post?action=create", "repo:app.attodo.task", "account:email?action=read"},
+		Scopes:     []string{"atproto", "repo:app.bsky.feed.post?action=create", "repo:app.attodo.task", "repo:app.attodo.list", "account:email?action=read"},
 	})
 
 	return &AuthHandler{

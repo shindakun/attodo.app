@@ -21,11 +21,17 @@ import (
 const TaskCollection = "app.attodo.task"
 
 type TaskHandler struct {
-	client *bskyoauth.Client
+	client      *bskyoauth.Client
+	listHandler *ListHandler
 }
 
 func NewTaskHandler(client *bskyoauth.Client) *TaskHandler {
 	return &TaskHandler{client: client}
+}
+
+// SetListHandler allows setting the list handler for cross-referencing
+func (h *TaskHandler) SetListHandler(listHandler *ListHandler) {
+	h.listHandler = listHandler
 }
 
 // withRetry executes an operation with automatic token refresh on DPoP errors
@@ -395,6 +401,33 @@ func (h *TaskHandler) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to list tasks: %v", err)
 		// Return empty list on error rather than failing
 		tasks = []models.Task{}
+	}
+
+	// Fetch all lists to populate task-to-list relationships
+	if h.listHandler != nil {
+		var lists []*models.TaskList
+		sess, err = h.listHandler.WithRetry(r.Context(), sess, func(s *bskyoauth.Session) error {
+			lists, err = h.listHandler.ListRecords(r.Context(), s)
+			return err
+		})
+
+		if err == nil && lists != nil {
+			// Create a map of task URI to lists
+			taskListMap := make(map[string][]*models.TaskList)
+			for _, list := range lists {
+				for _, taskURI := range list.TaskURIs {
+					taskListMap[taskURI] = append(taskListMap[taskURI], list)
+				}
+			}
+
+			// Populate the Lists field for each task
+			for i := range tasks {
+				taskURI := tasks[i].URI
+				if taskLists, exists := taskListMap[taskURI]; exists {
+					tasks[i].Lists = taskLists
+				}
+			}
+		}
 	}
 
 	// Filter tasks based on completion status

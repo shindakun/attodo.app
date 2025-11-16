@@ -22,6 +22,10 @@ func main() {
 	authHandler := handlers.NewAuthHandler(cfg)
 	authMiddleware := middleware.NewAuthMiddleware(authHandler)
 	taskHandler := handlers.NewTaskHandler(authHandler.Client())
+	listHandler := handlers.NewListHandler(authHandler.Client())
+
+	// Wire up cross-references between handlers
+	taskHandler.SetListHandler(listHandler)
 
 	// Initialize templates
 	handlers.InitTemplates()
@@ -37,7 +41,7 @@ func main() {
 
 	// Public routes
 	mux.HandleFunc("/", handleLanding(authHandler))
-	mux.HandleFunc("/client-metadata.json", authHandler.Client().ClientMetadataHandler())
+	mux.HandleFunc("/oauth-client-metadata.json", authHandler.Client().ClientMetadataHandler())
 	mux.HandleFunc("/login", authHandler.HandleLogin)
 	mux.HandleFunc("/callback", authHandler.Client().CallbackHandler(authHandler.CallbackSuccess))
 	mux.HandleFunc("/logout", authHandler.Logout)
@@ -50,6 +54,8 @@ func main() {
 	// Protected routes
 	mux.Handle("/app", authMiddleware.RequireAuth(http.HandlerFunc(handleDashboard)))
 	mux.Handle("/app/tasks", authMiddleware.RequireAuth(http.HandlerFunc(taskHandler.HandleTasks)))
+	mux.Handle("/app/lists", authMiddleware.RequireAuth(http.HandlerFunc(listHandler.HandleLists)))
+	mux.Handle("/app/lists/view/", authMiddleware.RequireAuth(http.HandlerFunc(listHandler.HandleListDetail)))
 
 	// Start server
 	log.Printf("Starting server on :%s", cfg.Port)

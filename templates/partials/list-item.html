@@ -1,0 +1,39 @@
+{{define "list-item.html"}}
+<div class="list-item" id="list-{{.RKey}}">
+    <div class="list-view">
+        <h4>{{.Name}}</h4>
+        {{if .Description}}<p>{{.Description}}</p>{{end}}
+        <small>{{len .TaskURIs}} task{{if ne (len .TaskURIs) 1}}s{{end}}</small>
+        {{if .UpdatedAt}}<small> • Updated: {{formatDate .UpdatedAt}}</small>{{end}}
+    </div>
+
+    <div class="list-edit" style="display: none;">
+        <form hx-put="/app/lists" hx-target="#list-{{.RKey}}" hx-swap="outerHTML">
+            <input type="hidden" name="rkey" value="{{.RKey}}">
+            <label>Name
+                <input type="text" name="name" value="{{.Name}}" required>
+            </label>
+            <label>Description
+                <textarea name="description" rows="2">{{.Description}}</textarea>
+            </label>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                <button type="submit">Save</button>
+                <button type="button" onclick="cancelListEdit('{{.RKey}}')">Cancel</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="list-actions">
+        <a href="/app/lists/view/{{.RKey}}" style="padding: 0.25rem 0.75rem;">View Tasks</a>
+        <button onclick="startListEdit('{{.RKey}}')">Edit</button>
+        <button class="delete"
+                hx-delete="/app/lists?rkey={{.RKey}}"
+                hx-target="#list-{{.RKey}}"
+                hx-swap="outerHTML"
+                hx-confirm="Are you sure you want to delete this list? This will not delete the tasks, only the list."
+                onclick="this.closest('.list-item').classList.add('list-removing')">
+            Delete
+        </button>
+    </div>
+</div>
+{{end}}

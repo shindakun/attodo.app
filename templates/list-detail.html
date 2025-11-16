@@ -1,0 +1,269 @@
+{{define "list-detail.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Name}} - AT Todo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+    <meta name="theme-color" content="#1e88e5">
+    <style>
+        .container {
+            max-width: 800px;
+        }
+        .list-header {
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--pico-muted-border-color);
+        }
+        .list-header h1 {
+            margin-bottom: 0.5rem;
+        }
+        .list-meta {
+            color: var(--pico-muted-color);
+            font-size: 0.9rem;
+        }
+        .task-item {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+        }
+        .task-item.completed {
+            opacity: 0.6;
+        }
+        .task-item h4 {
+            margin: 0 0 0.5rem 0;
+        }
+        .task-item.completed h4 {
+            text-decoration: line-through;
+        }
+        .task-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            justify-content: flex-end;
+        }
+        .task-actions button {
+            padding: 0.25rem 0.75rem;
+            margin: 0;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--pico-muted-color);
+        }
+        /* Toast notification styles */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .toast {
+            background-color: var(--pico-background-color);
+            border: 2px solid var(--pico-primary);
+            border-radius: var(--pico-border-radius);
+            padding: 1rem 1.5rem;
+            min-width: 250px;
+            max-width: 400px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .toast.success {
+            border-color: #10b981;
+        }
+        .toast.error {
+            border-color: #ef4444;
+        }
+        .toast.info {
+            border-color: #3b82f6;
+        }
+        .toast-message {
+            flex: 1;
+        }
+        .toast-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            margin: 0;
+            font-size: 1.25rem;
+            line-height: 1;
+            color: var(--pico-muted-color);
+            opacity: 0.7;
+        }
+        .toast-close:hover {
+            opacity: 1;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+        .toast.closing {
+            animation: slideOut 0.3s ease-in forwards;
+        }
+    </style>
+    <script>
+        // Toast notification system
+        function showToast(message, type = 'info', duration = 3000) {
+            const container = document.getElementById('toast-container');
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'toast-message';
+            messageDiv.textContent = message;
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'toast-close';
+            closeBtn.innerHTML = '&times;';
+            closeBtn.setAttribute('aria-label', 'Close');
+            closeBtn.onclick = () => closeToast(toast);
+
+            toast.appendChild(messageDiv);
+            toast.appendChild(closeBtn);
+            container.appendChild(toast);
+
+            // Auto-dismiss after duration
+            setTimeout(() => closeToast(toast), duration);
+        }
+
+        function closeToast(toast) {
+            toast.classList.add('closing');
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300); // Match animation duration
+        }
+
+        // HTMX event listeners for list operations
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.successful && evt.detail.verb === 'patch') {
+                showToast('Task removed from list successfully!', 'success');
+
+                // Update the task count in the header
+                updateTaskCount();
+            } else if (!evt.detail.successful && evt.detail.verb === 'patch') {
+                showToast('Failed to remove task from list. Please try again.', 'error');
+            }
+        });
+
+        // Update the task count displayed in the list header
+        function updateTaskCount() {
+            const visibleTasks = document.querySelectorAll('#list-tasks .task-item:not([style*="display: none"])').length;
+            const countElement = document.querySelector('.list-meta');
+            if (countElement) {
+                const countText = visibleTasks + ' task' + (visibleTasks !== 1 ? 's' : '');
+                const updatedText = countElement.textContent.replace(/^\d+ tasks?/, countText);
+                countElement.textContent = updatedText;
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- Toast notification container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <header class="container">
+        <nav>
+            <ul>
+                <li><strong>AT Todo</strong></li>
+            </ul>
+            <ul>
+                <li><a href="/app">Dashboard</a></li>
+                <li><a href="/docs">Docs</a></li>
+                <li><a href="/logout">Logout</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="container">
+        <section class="list-header">
+            <h1>{{.Name}}</h1>
+            {{if .Description}}
+            <p>{{.Description}}</p>
+            {{end}}
+            <div class="list-meta">
+                {{len .TaskURIs}} task{{if ne (len .TaskURIs) 1}}s{{end}}
+                {{if .UpdatedAt}} • Updated: {{formatDate .UpdatedAt}}{{end}}
+            </div>
+        </section>
+
+        <section>
+            <h2>Tasks in this List</h2>
+
+            {{if .TaskURIs}}
+            <div id="list-tasks">
+                <!-- Tasks will be loaded here -->
+                {{range .Tasks}}
+                <div class="task-item {{if .Completed}}completed{{end}}">
+                    <h4>{{.Title}}</h4>
+                    {{if .Description}}<p>{{.Description}}</p>{{end}}
+                    <small>Created: {{formatDate .CreatedAt}}</small>
+                    {{if .CompletedAt}}<small> • Completed: {{formatDate .CompletedAt}}</small>{{end}}
+
+                    <div class="task-actions">
+                        <button
+                            hx-patch="/app/lists"
+                            hx-vals='{"rkey": "{{$.RKey}}", "taskUri": "{{.URI}}", "action": "remove"}'
+                            onclick="this.closest('.task-item').style.display='none'">
+                            Remove from List
+                        </button>
+                        <a href="/app#task-{{.RKey}}" style="padding: 0.25rem 0.75rem;">View Task</a>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+            {{else}}
+            <div class="empty-state">
+                <h3>No tasks in this list yet</h3>
+                <p>Go to the <a href="/app">dashboard</a> to add tasks to this list.</p>
+            </div>
+            {{end}}
+        </section>
+
+        <section style="margin-top: 2rem;">
+            <a href="/app" role="button" class="secondary">← Back to Dashboard</a>
+        </section>
+    </main>
+
+    <footer class="container">
+        <p style="text-align: center; color: var(--pico-muted-color); font-size: 0.875rem;">
+            Made with ❤ in PDX!
+        </p>
+        <p class="version-info" style="text-align: center; color: var(--pico-muted-color); font-size: 0.75rem;">
+            {{getVersion}}-{{getCommitID}}
+        </p>
+    </footer>
+</body>
+</html>
+{{end}}

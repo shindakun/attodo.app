@@ -76,8 +76,210 @@
         .tab-content.active {
             display: block;
         }
+        .list-item {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+        }
+        .list-item h4 {
+            margin: 0 0 0.5rem 0;
+        }
+        .list-item.htmx-swapping,
+        .list-item.list-removing {
+            display: none;
+        }
+        .list-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            justify-content: flex-end;
+        }
+        .list-actions button {
+            padding: 0.25rem 0.75rem;
+            margin: 0;
+        }
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: var(--pico-background-color);
+            padding: 2rem;
+            border-radius: var(--pico-border-radius);
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-content h3 {
+            margin-top: 0;
+        }
+        .list-selector {
+            margin: 1rem 0;
+        }
+        .list-selector-item {
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .list-selector-item:hover {
+            background-color: var(--pico-primary-hover-background);
+        }
+        .list-selector-item h5 {
+            margin: 0 0 0.25rem 0;
+        }
+        .list-selector-item p {
+            margin: 0;
+            font-size: 0.875rem;
+            color: var(--pico-muted-color);
+        }
+        /* Toast notification styles */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .toast {
+            background-color: var(--pico-background-color);
+            border: 2px solid var(--pico-primary);
+            border-radius: var(--pico-border-radius);
+            padding: 1rem 1.5rem;
+            min-width: 250px;
+            max-width: 400px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .toast.success {
+            border-color: #10b981;
+        }
+        .toast.error {
+            border-color: #ef4444;
+        }
+        .toast.info {
+            border-color: #3b82f6;
+        }
+        .toast-message {
+            flex: 1;
+        }
+        .toast-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            margin: 0;
+            font-size: 1.25rem;
+            line-height: 1;
+            color: var(--pico-muted-color);
+            opacity: 0.7;
+        }
+        .toast-close:hover {
+            opacity: 1;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+        .toast.closing {
+            animation: slideOut 0.3s ease-in forwards;
+        }
+        /* Loading animation for tasks being added to lists */
+        .task-item.adding-to-list {
+            position: relative;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+        .task-item.adding-to-list::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 24px;
+            height: 24px;
+            margin: -12px 0 0 -12px;
+            border: 3px solid var(--pico-primary);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
     <script>
+        // Toast notification system
+        function showToast(message, type = 'info', duration = 3000) {
+            const container = document.getElementById('toast-container');
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'toast-message';
+            messageDiv.textContent = message;
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'toast-close';
+            closeBtn.innerHTML = '&times;';
+            closeBtn.setAttribute('aria-label', 'Close');
+            closeBtn.onclick = () => closeToast(toast);
+
+            toast.appendChild(messageDiv);
+            toast.appendChild(closeBtn);
+            container.appendChild(toast);
+
+            // Auto-dismiss after duration
+            setTimeout(() => closeToast(toast), duration);
+        }
+
+        function closeToast(toast) {
+            toast.classList.add('closing');
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300); // Match animation duration
+        }
+
         function switchTab(tabName) {
             // Remove active class from all tabs and tab contents
             document.querySelectorAll('.tabs button').forEach(btn => {
@@ -108,9 +310,129 @@
             taskItem.querySelector('.task-edit').style.display = 'none';
             taskItem.querySelector('.task-actions').style.display = 'flex';
         }
+
+        function startListEdit(rkey) {
+            const listItem = document.getElementById('list-' + rkey);
+            listItem.querySelector('.list-view').style.display = 'none';
+            listItem.querySelector('.list-edit').style.display = 'block';
+            listItem.querySelector('.list-actions').style.display = 'none';
+        }
+
+        function cancelListEdit(rkey) {
+            const listItem = document.getElementById('list-' + rkey);
+            listItem.querySelector('.list-view').style.display = 'block';
+            listItem.querySelector('.list-edit').style.display = 'none';
+            listItem.querySelector('.list-actions').style.display = 'flex';
+        }
+
+        async function showAddToList(taskRKey, taskURI) {
+            // Fetch available lists
+            try {
+                const response = await fetch('/app/lists');
+                const html = await response.text();
+
+                // Parse the HTML to extract list data
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const listItems = doc.querySelectorAll('.list-item');
+
+                if (listItems.length === 0) {
+                    showToast('No lists available. Please create a list first in the Lists tab.', 'info', 4000);
+                    return;
+                }
+
+                // Build modal content
+                let modalHTML = '<div class="list-selector">';
+                listItems.forEach(item => {
+                    const rkey = item.id.replace('list-', '');
+                    const name = item.querySelector('h4').textContent;
+                    const description = item.querySelector('p')?.textContent || '';
+
+                    modalHTML += `
+                        <div class="list-selector-item" onclick="addTaskToList('${rkey}', '${taskURI}')">
+                            <h5>${name}</h5>
+                            ${description ? `<p>${description}</p>` : ''}
+                        </div>
+                    `;
+                });
+                modalHTML += '</div>';
+
+                // Show modal
+                const modal = document.getElementById('list-selector-modal');
+                const modalBody = document.getElementById('list-selector-body');
+                modalBody.innerHTML = modalHTML;
+                modal.classList.add('active');
+
+            } catch (error) {
+                console.error('Failed to fetch lists:', error);
+                showToast('Failed to load lists. Please try again.', 'error');
+            }
+        }
+
+        function addTaskToList(listRKey, taskURI) {
+            // Close modal
+            document.getElementById('list-selector-modal').classList.remove('active');
+
+            // Extract task rkey from URI (e.g., at://did:plc:xxx/app.attodo.task/rkey)
+            const taskRKey = taskURI.split('/').pop();
+
+            // Show loading animation on the task
+            const taskElement = document.getElementById('task-' + taskRKey);
+            if (taskElement) {
+                taskElement.classList.add('adding-to-list');
+            }
+
+            // Add task to list using fetch to avoid HTMX content swapping
+            const formData = new URLSearchParams();
+            formData.append('rkey', listRKey);
+            formData.append('taskUri', taskURI);
+            formData.append('action', 'add');
+
+            fetch('/app/lists', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: formData
+            })
+            .then(response => {
+                if (response.ok) {
+                    showToast('Task added to list successfully!', 'success');
+
+                    // Reload the specific task item to show updated list membership
+                    if (taskElement) {
+                        htmx.ajax('GET', '/app/tasks?filter=' + (taskElement.classList.contains('completed') ? 'completed' : 'incomplete'), {
+                            target: '#task-' + taskRKey,
+                            swap: 'outerHTML',
+                            select: '#task-' + taskRKey
+                        });
+                    }
+                } else {
+                    showToast('Failed to add task to list. Please try again.', 'error');
+                    // Remove loading animation on error
+                    if (taskElement) {
+                        taskElement.classList.remove('adding-to-list');
+                    }
+                }
+            })
+            .catch(() => {
+                showToast('Failed to add task to list. Please try again.', 'error');
+                // Remove loading animation on error
+                if (taskElement) {
+                    taskElement.classList.remove('adding-to-list');
+                }
+            });
+        }
+
+        function closeModal() {
+            document.getElementById('list-selector-modal').classList.remove('active');
+        }
     </script>
 </head>
 <body>
+    <!-- Toast notification container -->
+    <div id="toast-container" class="toast-container"></div>
+
     <script>
         // Register service worker
         if ('serviceWorker' in navigator) {
@@ -129,6 +451,43 @@
                 }
             });
         }
+
+        // HTMX event listeners for operations with toast notifications
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            const target = evt.detail.target;
+            const verb = evt.detail.xhr?.status;
+            const url = evt.detail.pathInfo?.requestPath;
+
+            // Task operations
+            if (url?.includes('/app/tasks')) {
+                if (evt.detail.successful) {
+                    if (evt.detail.verb === 'post') {
+                        showToast('Task created successfully!', 'success');
+                    } else if (evt.detail.verb === 'put') {
+                        showToast('Task updated successfully!', 'success');
+                    } else if (evt.detail.verb === 'delete') {
+                        showToast('Task deleted successfully!', 'success');
+                    }
+                } else {
+                    showToast('Operation failed. Please try again.', 'error');
+                }
+            }
+
+            // List operations
+            if (url?.includes('/app/lists')) {
+                if (evt.detail.successful) {
+                    if (evt.detail.verb === 'post') {
+                        showToast('List created successfully!', 'success');
+                    } else if (evt.detail.verb === 'put') {
+                        showToast('List updated successfully!', 'success');
+                    } else if (evt.detail.verb === 'delete') {
+                        showToast('List deleted successfully!', 'success');
+                    }
+                } else if (!evt.detail.successful && evt.detail.verb !== 'get') {
+                    showToast('Operation failed. Please try again.', 'error');
+                }
+            }
+        });
     </script>
     <header class="container">
         <nav>
@@ -176,6 +535,7 @@
             <div class="tabs">
                 <button class="active" onclick="switchTab('incomplete')">Incomplete</button>
                 <button onclick="switchTab('completed')">Completed</button>
+                <button onclick="switchTab('lists')">Lists</button>
             </div>
 
             <!-- Incomplete Tasks Tab -->
@@ -191,6 +551,37 @@
                     <!-- Completed tasks will be loaded here -->
                 </div>
             </div>
+
+            <!-- Lists Tab -->
+            <div id="lists-tab" class="tab-content">
+                <!-- Create List Form -->
+                <article style="margin-bottom: 2rem;">
+                    <h3>Create New List</h3>
+                    <form
+                        hx-post="/app/lists"
+                        hx-target="#lists-list"
+                        hx-swap="afterbegin"
+                        hx-on::after-request="this.reset()"
+                    >
+                        <label for="list-name">
+                            List Name
+                            <input type="text" name="name" id="list-name" required placeholder="e.g., Work, Personal, Shopping">
+                        </label>
+
+                        <label for="list-description">
+                            Description (optional)
+                            <textarea name="description" id="list-description" rows="2" placeholder="Describe this list..."></textarea>
+                        </label>
+
+                        <button type="submit">Create List</button>
+                    </form>
+                </article>
+
+                <!-- Lists Display -->
+                <div id="lists-list" hx-get="/app/lists" hx-trigger="load, reload from:body" hx-swap="innerHTML">
+                    <!-- Lists will be loaded here -->
+                </div>
+            </div>
         </section>
     </main>
 
@@ -202,6 +593,18 @@
             {{getVersion}}-{{getCommitID}}
         </p>
     </footer>
+
+    <!-- List Selector Modal -->
+    <div id="list-selector-modal" class="modal" onclick="if(event.target === this) closeModal()">
+        <div class="modal-content">
+            <h3>Add Task to List</h3>
+            <p>Select a list to add this task to:</p>
+            <div id="list-selector-body">
+                <!-- List items will be dynamically inserted here -->
+            </div>
+            <button onclick="closeModal()" class="secondary" style="width: 100%; margin-top: 1rem;">Cancel</button>
+        </div>
+    </div>
 </body>
 </html>
 {{end}}

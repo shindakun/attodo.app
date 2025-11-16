@@ -130,6 +130,8 @@ github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/shindakun/bskyoauth v1.3.3 h1:JvSvi+SLJROoRKU92OrUXtdPcDv6opslO65msT1ndAA=
 github.com/shindakun/bskyoauth v1.3.3/go.mod h1:OBeyXPUQL+3R3vWrLS6c44XnI0jQZ+H0/djvyOVwqdQ=
+github.com/shindakun/bskyoauth v1.4.0 h1:Ityt5W10uzrO2yX0D5c5cPGrz07Gd4VWnqC+QMthQ6E=
+github.com/shindakun/bskyoauth v1.4.0/go.mod h1:rCvGsSoRYHajK6IIz1q1Dglb6QgmSYCyWsmLM99RMTQ=
 github.com/shurcooL/sanitized_anchor_name v1.0.0/go.mod h1:1NzhyTcUVG4SuEtjjoZeVRXNmyL/1OwPU0+IJeTBvfc=
 github.com/smartystreets/assertions v1.2.0 h1:42S6lae5dvLc7BrLu/0ugRtcFVjoJNMC/N3yZFZkDFs=
 github.com/smartystreets/assertions v1.2.0/go.mod h1:tcbTF8ujkAEcZ8TElKY+i30BzYlVhC/LOxJk7iOWnoo=
