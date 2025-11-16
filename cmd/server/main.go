@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/shindakun/attodo/internal/config"
 	"github.com/shindakun/attodo/internal/handlers"
@@ -26,6 +28,12 @@ func main() {
 
 	// Setup routes
 	mux := http.NewServeMux()
+
+	// Static files
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+
+	// Health endpoint
+	mux.HandleFunc("/health", handleHealth(cfg))
 
 	// Public routes
 	mux.HandleFunc("/", handleLanding(authHandler))
@@ -65,4 +73,21 @@ func handleLanding(authHandler *handlers.AuthHandler) http.HandlerFunc {
 
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
 	handlers.Render(w, "dashboard.html", nil)
+}
+
+func handleHealth(cfg *config.Config) http.HandlerFunc {
+	startTime := time.Now()
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		health := map[string]interface{}{
+			"status":    "healthy",
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+			"uptime":    time.Since(startTime).String(),
+			"baseURL":   cfg.BaseURL,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(health)
+	}
 }

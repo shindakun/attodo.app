@@ -7,13 +7,41 @@
     <title>Welcome to AT Todo</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+    <meta name="theme-color" content="#1e88e5">
     <style>
         .container {
             max-width: 800px;
         }
+        nav strong {
+            font-size: 1.5rem;
+        }
+        article h2 {
+            font-size: 1.5rem;
+        }
     </style>
 </head>
 <body>
+    <script>
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js')
+                .then(registration => {
+                    console.log('Service Worker registered:', registration);
+                })
+                .catch(error => {
+                    console.error('Service Worker registration failed:', error);
+                });
+
+            // Listen for health check messages from service worker
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'HEALTH_CHECK') {
+                    console.log('Health check:', event.data);
+                }
+            });
+        }
+    </script>
     <header class="container">
         <nav>
             <ul>

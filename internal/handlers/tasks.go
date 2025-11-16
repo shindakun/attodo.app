@@ -112,8 +112,10 @@ func (h *TaskHandler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 		h.handleListTasks(w, r)
 	case http.MethodPost:
 		h.handleCreateTask(w, r)
-	case http.MethodPut, http.MethodPatch:
+	case http.MethodPut:
 		h.handleUpdateTask(w, r)
+	case http.MethodPatch:
+		h.handleEditTask(w, r)
 	case http.MethodDelete:
 		h.handleDeleteTask(w, r)
 	default:
@@ -254,6 +256,78 @@ func (h *TaskHandler) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Task updated: %s (completed: %v)", rkey, task.Completed)
 
+	// Return empty response to trigger deletion from current view
+	// The task will appear in the other tab when reloaded
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleEditTask edits task title and description
+func (h *TaskHandler) handleEditTask(w http.ResponseWriter, r *http.Request) {
+	sess, ok := session.GetSession(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse form
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	rkey := r.FormValue("rkey")
+	title := r.FormValue("title")
+
+	if rkey == "" {
+		http.Error(w, "rkey is required", http.StatusBadRequest)
+		return
+	}
+
+	if title == "" {
+		http.Error(w, "Title is required", http.StatusBadRequest)
+		return
+	}
+
+	// Get the current task
+	var task *models.Task
+	var err error
+
+	sess, err = h.withRetry(r.Context(), sess, func(s *bskyoauth.Session) error {
+		task, err = h.getRecord(r.Context(), s, rkey)
+		return err
+	})
+
+	if err != nil {
+		log.Printf("Failed to get task for edit: %v", err)
+		http.Error(w, "Failed to get task", http.StatusInternalServerError)
+		return
+	}
+
+	// Update title and description
+	task.Title = title
+	task.Description = r.FormValue("description")
+
+	// Build the record for update
+	record := buildTaskRecord(task)
+
+	sess, err = h.withRetry(r.Context(), sess, func(s *bskyoauth.Session) error {
+		return h.updateRecord(r.Context(), s, rkey, record)
+	})
+
+	if err != nil {
+		log.Printf("Failed to edit task after retries: %v", err)
+		http.Error(w, "Failed to edit task", http.StatusInternalServerError)
+		return
+	}
+
+	// Update session with new nonce after successful operation
+	cookie, _ := r.Cookie("session_id")
+	if cookie != nil {
+		h.client.UpdateSession(cookie.Value, sess)
+	}
+
+	log.Printf("Task edited: %s", rkey)
+
 	// Return updated task partial for HTMX to swap
 	w.Header().Set("Content-Type", "text/html")
 	Render(w, "task-item.html", task)
@@ -303,7 +377,10 @@ func (h *TaskHandler) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Listing tasks for DID: %s", sess.DID)
+	// Get filter parameter
+	filter := r.URL.Query().Get("filter")
+
+	log.Printf("Listing tasks for DID: %s (filter: %s)", sess.DID, filter)
 
 	// Use com.atproto.repo.listRecords to fetch all tasks
 	var tasks []models.Task
@@ -320,11 +397,23 @@ func (h *TaskHandler) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		tasks = []models.Task{}
 	}
 
-	log.Printf("Found %d tasks", len(tasks))
+	// Filter tasks based on completion status
+	filteredTasks := make([]models.Task, 0)
+	for _, task := range tasks {
+		if filter == "completed" && task.Completed {
+			filteredTasks = append(filteredTasks, task)
+		} else if filter == "incomplete" && !task.Completed {
+			filteredTasks = append(filteredTasks, task)
+		} else if filter == "" {
+			filteredTasks = append(filteredTasks, task)
+		}
+	}
+
+	log.Printf("Found %d tasks (filtered: %d)", len(tasks), len(filteredTasks))
 
 	// Return HTML partials for HTMX
 	w.Header().Set("Content-Type", "text/html")
-	for _, task := range tasks {
+	for _, task := range filteredTasks {
 		if err := Render(w, "task-item.html", task); err != nil {
 			log.Printf("Failed to render task: %v", err)
 		}

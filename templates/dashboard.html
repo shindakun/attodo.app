@@ -7,6 +7,9 @@
     <title>Dashboard - AT Todo</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+    <meta name="theme-color" content="#1e88e5">
     <style>
         .container {
             max-width: 800px;
@@ -26,18 +29,107 @@
         .task-item.completed h4 {
             text-decoration: line-through;
         }
+        .task-item.htmx-swapping,
+        .task-item.task-removing {
+            display: none;
+        }
         .task-actions {
             display: flex;
             gap: 0.5rem;
             margin-top: 0.5rem;
+            justify-content: flex-end;
         }
         .task-actions button {
             padding: 0.25rem 0.75rem;
             margin: 0;
         }
+        .task-actions button.delete {
+            background-color: var(--pico-del-color);
+            border-color: var(--pico-del-color);
+        }
+        .task-actions button.delete:hover {
+            background-color: var(--pico-del-hover-color);
+            border-color: var(--pico-del-hover-color);
+        }
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid var(--pico-muted-border-color);
+        }
+        .tabs button {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 0.5rem 1rem;
+            margin: 0 0 -2px 0;
+            cursor: pointer;
+            color: var(--pico-color);
+        }
+        .tabs button.active {
+            border-bottom-color: var(--pico-primary);
+            color: var(--pico-primary);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
     </style>
+    <script>
+        function switchTab(tabName) {
+            // Remove active class from all tabs and tab contents
+            document.querySelectorAll('.tabs button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Add active class to selected tab and content
+            event.target.classList.add('active');
+            document.getElementById(tabName + '-tab').classList.add('active');
+
+            // Reload the tasks for the selected tab
+            htmx.trigger('#' + tabName + '-tasks', 'reload');
+        }
+
+        function startEdit(rkey) {
+            const taskItem = document.getElementById('task-' + rkey);
+            taskItem.querySelector('.task-view').style.display = 'none';
+            taskItem.querySelector('.task-edit').style.display = 'block';
+            taskItem.querySelector('.task-actions').style.display = 'none';
+        }
+
+        function cancelEdit(rkey) {
+            const taskItem = document.getElementById('task-' + rkey);
+            taskItem.querySelector('.task-view').style.display = 'block';
+            taskItem.querySelector('.task-edit').style.display = 'none';
+            taskItem.querySelector('.task-actions').style.display = 'flex';
+        }
+    </script>
 </head>
 <body>
+    <script>
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js')
+                .then(registration => {
+                    console.log('Service Worker registered:', registration);
+                })
+                .catch(error => {
+                    console.error('Service Worker registration failed:', error);
+                });
+
+            // Listen for health check messages from service worker
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'HEALTH_CHECK') {
+                    console.log('Health check:', event.data);
+                }
+            });
+        }
+    </script>
     <header class="container">
         <nav>
             <ul>
@@ -61,9 +153,9 @@
                 <h3>Add New Task</h3>
                 <form
                     hx-post="/app/tasks"
-                    hx-target="#task-list"
+                    hx-target="#incomplete-tasks"
                     hx-swap="afterbegin"
-                    hx-on::after-request="this.reset()"
+                    hx-on::after-request="this.reset(); htmx.trigger('#completed-tasks', 'load')"
                 >
                     <label for="title">
                         Title
@@ -79,9 +171,24 @@
                 </form>
             </article>
 
-            <!-- Task List -->
-            <div id="task-list" hx-get="/app/tasks" hx-trigger="load" hx-swap="innerHTML">
-                <!-- Tasks will be loaded here -->
+            <!-- Task Tabs -->
+            <div class="tabs">
+                <button class="active" onclick="switchTab('incomplete')">Incomplete</button>
+                <button onclick="switchTab('completed')">Completed</button>
+            </div>
+
+            <!-- Incomplete Tasks Tab -->
+            <div id="incomplete-tab" class="tab-content active">
+                <div id="incomplete-tasks" hx-get="/app/tasks?filter=incomplete" hx-trigger="load, reload from:body" hx-swap="innerHTML">
+                    <!-- Incomplete tasks will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Completed Tasks Tab -->
+            <div id="completed-tab" class="tab-content">
+                <div id="completed-tasks" hx-get="/app/tasks?filter=completed" hx-trigger="load, reload from:body" hx-swap="innerHTML">
+                    <!-- Completed tasks will be loaded here -->
+                </div>
             </div>
         </section>
     </main>
