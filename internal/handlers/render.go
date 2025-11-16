@@ -20,10 +20,11 @@ func InitTemplates(cfg *config.Config) error {
 		"formatDate": func(t interface{}) string {
 			switch v := t.(type) {
 			case time.Time:
-				return v.Local().Format("Jan 2, 2006 3:04 PM")
+				// Return ISO 8601 format for JavaScript to parse
+				return v.Format(time.RFC3339)
 			case *time.Time:
 				if v != nil {
-					return v.Local().Format("Jan 2, 2006 3:04 PM")
+					return v.Format(time.RFC3339)
 				}
 				return ""
 			default:

@@ -605,6 +605,38 @@
             <button onclick="closeModal()" class="secondary" style="width: 100%; margin-top: 1rem;">Cancel</button>
         </div>
     </div>
+
+    <script>
+        // Convert all timestamps to user's local timezone
+        function formatLocalTime() {
+            document.querySelectorAll('time.local-time').forEach(function(timeElement) {
+                const datetime = timeElement.getAttribute('datetime');
+                if (datetime) {
+                    try {
+                        const date = new Date(datetime);
+                        // Format: Jan 15, 2025 3:04 PM
+                        const options = {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                        };
+                        timeElement.textContent = date.toLocaleString('en-US', options);
+                    } catch (e) {
+                        console.error('Error formatting date:', e);
+                    }
+                }
+            });
+        }
+
+        // Run on page load
+        formatLocalTime();
+
+        // Re-run after HTMX swaps content
+        document.body.addEventListener('htmx:afterSwap', formatLocalTime);
+    </script>
 </body>
 </html>
 {{end}}

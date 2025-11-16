@@ -5,9 +5,9 @@
         {{if .Description}}
         <p>{{.Description}}</p>
         {{end}}
-        <small>Created: {{formatDate .CreatedAt}}</small>
+        <small>Created: <time class="local-time" datetime="{{formatDate .CreatedAt}}">{{formatDate .CreatedAt}}</time></small>
         {{if .CompletedAt}}
-        <small> • Completed: {{formatDate .CompletedAt}}</small>
+        <small> • Completed: <time class="local-time" datetime="{{formatDate .CompletedAt}}">{{formatDate .CompletedAt}}</time></small>
         {{end}}
         {{if .Lists}}
         <div style="margin-top: 0.5rem;">

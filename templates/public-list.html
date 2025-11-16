@@ -128,7 +128,7 @@
             {{end}}
             <div class="list-meta">
                 <span>{{len .TaskURIs}} task{{if ne (len .TaskURIs) 1}}s{{end}}</span>
-                {{if .UpdatedAt}} • Updated: {{formatDate .UpdatedAt}}{{end}}
+                {{if .UpdatedAt}} • Updated: <time class="local-time" datetime="{{formatDate .UpdatedAt}}">{{formatDate .UpdatedAt}}</time>{{end}}
             </div>
         </section>
         <section>
@@ -150,7 +150,7 @@
                         <div class="task-item">
                             <h4>{{.Title}}</h4>
                             {{if .Description}}<p>{{.Description}}</p>{{end}}
-                            <small>Created: {{formatDate .CreatedAt}}</small>
+                            <small>Created: <time class="local-time" datetime="{{formatDate .CreatedAt}}">{{formatDate .CreatedAt}}</time></small>
                         </div>
                     {{end}}
                 {{end}}
@@ -171,8 +171,8 @@
                         <div class="task-item completed">
                             <h4>{{.Title}}</h4>
                             {{if .Description}}<p>{{.Description}}</p>{{end}}
-                            <small>Created: {{formatDate .CreatedAt}}</small>
-                            {{if .CompletedAt}}<small> • Completed: {{formatDate .CompletedAt}}</small>{{end}}
+                            <small>Created: <time class="local-time" datetime="{{formatDate .CreatedAt}}">{{formatDate .CreatedAt}}</time></small>
+                            {{if .CompletedAt}}<small> • Completed: <time class="local-time" datetime="{{formatDate .CompletedAt}}">{{formatDate .CompletedAt}}</time></small>{{end}}
                         </div>
                     {{end}}
                 {{end}}
@@ -202,6 +202,35 @@
             {{getVersion}}-{{getCommitID}}
         </p>
     </footer>
+
+    <script>
+        // Convert all timestamps to user's local timezone
+        function formatLocalTime() {
+            document.querySelectorAll('time.local-time').forEach(function(timeElement) {
+                const datetime = timeElement.getAttribute('datetime');
+                if (datetime) {
+                    try {
+                        const date = new Date(datetime);
+                        // Format: Jan 15, 2025 3:04 PM
+                        const options = {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                        };
+                        timeElement.textContent = date.toLocaleString('en-US', options);
+                    } catch (e) {
+                        console.error('Error formatting date:', e);
+                    }
+                }
+            });
+        }
+
+        // Run on page load
+        formatLocalTime();
+    </script>
 </body>
 </html>
 {{end}}
