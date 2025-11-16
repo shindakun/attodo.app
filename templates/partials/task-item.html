@@ -1,28 +1,58 @@
 {{define "task-item.html"}}
 <div class="task-item {{if .Completed}}completed{{end}}" id="task-{{.RKey}}">
-    <h4>{{.Title}}</h4>
-    {{if .Description}}
-    <p>{{.Description}}</p>
-    {{end}}
-    <small>Created: {{formatDate .CreatedAt}}</small>
-    {{if .CompletedAt}}
-    <small> • Completed: {{formatDate .CompletedAt}}</small>
-    {{end}}
+    <div class="task-view">
+        <h4>{{.Title}}</h4>
+        {{if .Description}}
+        <p>{{.Description}}</p>
+        {{end}}
+        <small>Created: {{formatDate .CreatedAt}}</small>
+        {{if .CompletedAt}}
+        <small> • Completed: {{formatDate .CompletedAt}}</small>
+        {{end}}
+    </div>
+
+    <div class="task-edit" style="display: none;">
+        <form
+            hx-patch="/app/tasks"
+            hx-target="#task-{{.RKey}}"
+            hx-swap="outerHTML"
+        >
+            <input type="hidden" name="rkey" value="{{.RKey}}">
+            <label>
+                Title
+                <input type="text" name="title" value="{{.Title}}" required>
+            </label>
+            <label>
+                Description
+                <textarea name="description" rows="3">{{.Description}}</textarea>
+            </label>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                <button type="submit">Save</button>
+                <button type="button" onclick="cancelEdit('{{.RKey}}')">Cancel</button>
+            </div>
+        </form>
+    </div>
 
     <div class="task-actions">
+        <button onclick="startEdit('{{.RKey}}')">
+            Edit
+        </button>
         <button
             hx-put="/app/tasks"
             hx-vals='{"rkey": "{{.RKey}}"}'
             hx-target="#task-{{.RKey}}"
             hx-swap="outerHTML"
+            onclick="this.closest('.task-item').classList.add('task-removing')"
         >
             {{if .Completed}}Mark Incomplete{{else}}Mark Complete{{end}}
         </button>
         <button
+            class="delete"
             hx-delete="/app/tasks?rkey={{.RKey}}"
             hx-target="#task-{{.RKey}}"
             hx-swap="outerHTML"
             hx-confirm="Are you sure you want to delete this task?"
+            onclick="this.closest('.task-item').classList.add('task-removing')"
         >
             Delete
         </button>
