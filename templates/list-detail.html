@@ -264,9 +264,26 @@
     <div id="toast-container" class="toast-container"></div>
 
     <script>
-        // HTMX event listeners for list operations
+        // HTMX event listeners for list and task operations
         document.body.addEventListener('htmx:afterRequest', function(evt) {
             const url = evt.detail.pathInfo && evt.detail.pathInfo.requestPath;
+
+            // Check if this is a task completion operation
+            if (url && url.includes('/app/tasks') && evt.detail.xhr && evt.detail.verb === 'put') {
+                if (evt.detail.successful) {
+                    showToast('Task marked as complete!', 'success');
+
+                    // Update the task count after a short delay to ensure DOM is updated
+                    setTimeout(updateTaskCount, 50);
+
+                    // Reload the page after a short delay to show the task in the completed tab
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showToast('Failed to mark task as complete. Please try again.', 'error');
+                }
+            }
 
             // Check if this is a list operation
             if (url && url.includes('/app/lists') && evt.detail.xhr) {
@@ -334,12 +351,19 @@
                 {{range .Tasks}}
                     {{if not .Completed}}
                         {{$hasIncomplete = true}}
-                        <div class="task-item">
+                        <div class="task-item" id="task-{{.RKey}}">
                             <h4>{{.Title}}</h4>
                             {{if .Description}}<p>{{.Description}}</p>{{end}}
                             <small>Created: {{formatDate .CreatedAt}}</small>
 
                             <div class="task-actions">
+                                <button
+                                    hx-put="/app/tasks"
+                                    hx-vals='{"rkey": "{{.RKey}}"}'
+                                    hx-target="#task-{{.RKey}}"
+                                    hx-swap="outerHTML">
+                                    Mark Complete
+                                </button>
                                 <button
                                     hx-patch="/app/lists"
                                     hx-vals='{"rkey": "{{$.RKey}}", "taskUri": "{{.URI}}", "action": "remove"}'
