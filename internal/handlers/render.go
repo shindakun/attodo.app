@@ -20,10 +20,10 @@ func InitTemplates(cfg *config.Config) error {
 		"formatDate": func(t interface{}) string {
 			switch v := t.(type) {
 			case time.Time:
-				return v.Format("Jan 2, 2006 3:04 PM")
+				return v.Local().Format("Jan 2, 2006 3:04 PM")
 			case *time.Time:
 				if v != nil {
-					return v.Format("Jan 2, 2006 3:04 PM")
+					return v.Local().Format("Jan 2, 2006 3:04 PM")
 				}
 				return ""
 			default:

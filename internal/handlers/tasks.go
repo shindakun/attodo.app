@@ -152,12 +152,13 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create task record
+	now := time.Now().UTC()
 	record := map[string]interface{}{
 		"$type":       TaskCollection,
 		"title":       title,
 		"description": description,
 		"completed":   false,
-		"createdAt":   time.Now().Format(time.RFC3339),
+		"createdAt":   now.Format(time.RFC3339),
 	}
 
 	// Try to create record with retry logic
@@ -183,7 +184,7 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		Title:       title,
 		Description: description,
 		Completed:   false,
-		CreatedAt:   time.Now(),
+		CreatedAt:   now,
 		RKey:        rkey,
 		URI:         output.Uri,
 	}
@@ -235,7 +236,7 @@ func (h *TaskHandler) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 
 	// Update completedAt based on completion status
 	if task.Completed {
-		now := time.Now()
+		now := time.Now().UTC()
 		task.CompletedAt = &now
 	} else {
 		task.CompletedAt = nil

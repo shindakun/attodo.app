@@ -208,12 +208,13 @@ func (h *ListHandler) handleCreateList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create new list
+	now := time.Now().UTC()
 	list := &models.TaskList{
 		Name:        name,
 		Description: r.FormValue("description"),
 		TaskURIs:    []string{}, // Empty initially
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	// Build record
@@ -330,7 +331,7 @@ func (h *ListHandler) handleUpdateList(w http.ResponseWriter, r *http.Request) {
 		list.Name = name
 	}
 	list.Description = r.FormValue("description")
-	list.UpdatedAt = time.Now()
+	list.UpdatedAt = time.Now().UTC()
 
 	// Handle task URI updates if provided
 	if taskURIsJSON := r.FormValue("taskUris"); taskURIsJSON != "" {
@@ -436,7 +437,7 @@ func (h *ListHandler) handleManageTasks(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Update timestamp
-	list.UpdatedAt = time.Now()
+	list.UpdatedAt = time.Now().UTC()
 
 	// Build record and update
 	updatedRecord := buildListRecord(list)
