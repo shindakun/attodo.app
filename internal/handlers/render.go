@@ -6,12 +6,16 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/shindakun/attodo/internal/config"
 	"github.com/shindakun/attodo/internal/version"
 )
 
 var templates *template.Template
+var appConfig *config.Config
 
-func InitTemplates() error {
+func InitTemplates(cfg *config.Config) error {
+	appConfig = cfg
+
 	funcMap := template.FuncMap{
 		"formatDate": func(t interface{}) string {
 			switch v := t.(type) {
@@ -31,6 +35,12 @@ func InitTemplates() error {
 		},
 		"getCommitID": func() string {
 			return version.GetCommitID()
+		},
+		"getBaseURL": func() string {
+			if appConfig != nil {
+				return appConfig.BaseURL
+			}
+			return ""
 		},
 	}
 

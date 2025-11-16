@@ -46,7 +46,7 @@ func (h *ListHandler) HandleLists(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleListDetail shows a specific list with its tasks
+// HandleListDetail shows a specific list with its tasks (authenticated)
 func (h *ListHandler) HandleListDetail(w http.ResponseWriter, r *http.Request) {
 	sess, ok := session.GetSession(r)
 	if !ok {
@@ -85,6 +85,16 @@ func (h *ListHandler) HandleListDetail(w http.ResponseWriter, r *http.Request) {
 	list.RKey = rkey
 	list.URI = fmt.Sprintf("at://%s/%s/%s", sess.DID, ListCollection, rkey)
 
+	// Resolve DID to handle for public sharing URL
+	dir := identity.DefaultDirectory()
+	atid, err := syntax.ParseAtIdentifier(sess.DID)
+	if err == nil {
+		ident, err := dir.Lookup(r.Context(), *atid)
+		if err == nil {
+			list.OwnerHandle = ident.Handle.String()
+		}
+	}
+
 	// Resolve tasks from URIs
 	if len(list.TaskURIs) > 0 {
 		tasks, err := h.resolveTasksFromURIs(r.Context(), sess, list.TaskURIs)
@@ -105,6 +115,76 @@ func (h *ListHandler) HandleListDetail(w http.ResponseWriter, r *http.Request) {
 	// Render list detail view
 	w.Header().Set("Content-Type", "text/html")
 	Render(w, "list-detail.html", list)
+}
+
+// HandlePublicListView shows a public read-only view of a list
+func (h *ListHandler) HandlePublicListView(w http.ResponseWriter, r *http.Request) {
+	// Extract handle and rkey from URL path (e.g., /list/@handle.bsky.social/abc123)
+	path := strings.TrimPrefix(r.URL.Path, "/list/")
+	parts := strings.Split(path, "/")
+
+	if len(parts) < 2 {
+		http.Error(w, "Invalid list URL format. Expected: /list/@handle/rkey", http.StatusBadRequest)
+		return
+	}
+
+	handle := strings.TrimPrefix(parts[0], "@")
+	rkey := parts[1]
+
+	if handle == "" || rkey == "" {
+		http.Error(w, "Handle and list ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Resolve the handle to a DID
+	dir := identity.DefaultDirectory()
+	atid, err := syntax.ParseAtIdentifier(handle)
+	if err != nil {
+		log.Printf("Failed to parse handle %s: %v", handle, err)
+		http.Error(w, "Invalid handle", http.StatusBadRequest)
+		return
+	}
+
+	ident, err := dir.Lookup(r.Context(), *atid)
+	if err != nil {
+		log.Printf("Failed to resolve handle %s: %v", handle, err)
+		http.Error(w, "Handle not found", http.StatusNotFound)
+		return
+	}
+
+	did := ident.DID.String()
+	pds := ident.PDSEndpoint()
+
+	log.Printf("Fetching public list: handle=%s, did=%s, rkey=%s", handle, did, rkey)
+
+	// Fetch the list record publicly
+	record, err := h.getPublicRecord(r.Context(), pds, did, rkey)
+	if err != nil {
+		log.Printf("Failed to get public list: %v", err)
+		http.Error(w, "List not found or not public", http.StatusNotFound)
+		return
+	}
+
+	// Parse list
+	list := parseListRecord(record)
+	list.RKey = rkey
+	list.URI = fmt.Sprintf("at://%s/%s/%s", did, ListCollection, rkey)
+	list.OwnerHandle = handle
+
+	// Resolve tasks from URIs (public fetch)
+	if len(list.TaskURIs) > 0 {
+		tasks, err := h.resolvePublicTasksFromURIs(r.Context(), pds, did, list.TaskURIs)
+		if err != nil {
+			log.Printf("Failed to resolve public tasks for list %s: %v", rkey, err)
+			// Continue anyway, just with empty tasks
+		} else {
+			list.Tasks = tasks
+		}
+	}
+
+	// Render public list view
+	w.Header().Set("Content-Type", "text/html")
+	Render(w, "public-list.html", list)
 }
 
 // handleCreateList creates a new list
@@ -804,4 +884,120 @@ func parseListRecord(value map[string]interface{}) *models.TaskList {
 	}
 
 	return list
+}
+
+// getPublicRecord retrieves a list record publicly (no authentication)
+func (h *ListHandler) getPublicRecord(ctx context.Context, pds, did, rkey string) (map[string]interface{}, error) {
+	// Build the XRPC URL
+	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.getRecord?repo=%s&collection=%s&rkey=%s",
+		pds, did, ListCollection, rkey)
+
+	// Create request (no authentication for public access)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("XRPC ERROR %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// Parse response
+	var result struct {
+		URI   string                 `json:"uri"`
+		CID   string                 `json:"cid"`
+		Value map[string]interface{} `json:"value"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result.Value, nil
+}
+
+// resolvePublicTasksFromURIs fetches task records publicly (no authentication)
+func (h *ListHandler) resolvePublicTasksFromURIs(ctx context.Context, pds, did string, taskURIs []string) ([]*models.Task, error) {
+	tasks := make([]*models.Task, 0, len(taskURIs))
+
+	for _, uri := range taskURIs {
+		// Parse the URI to extract rkey
+		// Format: at://did:plc:xxx/app.attodo.task/rkey
+		parts := strings.Split(uri, "/")
+		if len(parts) < 4 {
+			log.Printf("Invalid task URI format: %s", uri)
+			continue
+		}
+
+		collection := parts[len(parts)-2]
+		rkey := parts[len(parts)-1]
+
+		// Only fetch if it's a task collection
+		if collection != "app.attodo.task" {
+			log.Printf("Skipping non-task URI: %s", uri)
+			continue
+		}
+
+		// Fetch the task record publicly
+		taskRecord, err := h.getPublicTaskRecord(ctx, pds, did, rkey)
+		if err != nil {
+			log.Printf("Failed to fetch public task %s: %v", rkey, err)
+			continue
+		}
+
+		// Parse task
+		task := parseTaskRecord(taskRecord)
+		task.RKey = rkey
+		task.URI = uri
+
+		tasks = append(tasks, task)
+	}
+
+	return tasks, nil
+}
+
+// getPublicTaskRecord retrieves a single task record publicly (no authentication)
+func (h *ListHandler) getPublicTaskRecord(ctx context.Context, pds, did, rkey string) (map[string]interface{}, error) {
+	// Build the XRPC URL for tasks
+	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.getRecord?repo=%s&collection=%s&rkey=%s",
+		pds, did, "app.attodo.task", rkey)
+
+	// Create request (no authentication for public access)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("XRPC ERROR %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// Parse response
+	var result struct {
+		URI   string                 `json:"uri"`
+		CID   string                 `json:"cid"`
+		Value map[string]interface{} `json:"value"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result.Value, nil
 }

@@ -28,7 +28,7 @@ func main() {
 	taskHandler.SetListHandler(listHandler)
 
 	// Initialize templates
-	handlers.InitTemplates()
+	handlers.InitTemplates(cfg)
 
 	// Setup routes
 	mux := http.NewServeMux()
@@ -50,6 +50,9 @@ func main() {
 	mux.HandleFunc("/docs", handlers.Docs)
 	mux.HandleFunc("/docs/", handlers.DocsPage)
 	mux.HandleFunc("/docs/images/", handlers.DocsImage)
+
+	// Public list view route
+	mux.HandleFunc("/list/", listHandler.HandlePublicListView)
 
 	// Protected routes
 	mux.Handle("/app", authMiddleware.RequireAuth(http.HandlerFunc(handleDashboard)))

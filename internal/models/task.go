@@ -27,8 +27,9 @@ type TaskList struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 
 	// Metadata from AT Protocol (populated after creation)
-	RKey string `json:"-"` // Record key (extracted from URI)
-	URI  string `json:"-"` // Full AT URI
+	RKey        string `json:"-"` // Record key (extracted from URI)
+	URI         string `json:"-"` // Full AT URI
+	OwnerHandle string `json:"-"` // Handle of the list owner (for public views)
 
 	// Transient field - populated when fetching list with tasks
 	Tasks []*Task `json:"-"` // Resolved task objects (not stored in AT Protocol)

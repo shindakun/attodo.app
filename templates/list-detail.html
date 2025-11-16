@@ -56,6 +56,53 @@
             padding: 3rem 2rem;
             color: var(--pico-muted-color);
         }
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid var(--pico-muted-border-color);
+        }
+        .tabs button {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 0.5rem 1rem;
+            margin: 0 0 -2px 0;
+            cursor: pointer;
+            color: var(--pico-color);
+        }
+        .tabs button.active {
+            border-bottom-color: var(--pico-primary);
+            color: var(--pico-primary);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .share-section {
+            background-color: var(--pico-card-background-color);
+            border: 1px solid var(--pico-muted-border-color);
+            padding: 1rem;
+            border-radius: var(--pico-border-radius);
+            margin-bottom: 1.5rem;
+        }
+        .share-url {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .share-url input {
+            flex: 1;
+            margin: 0;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .share-url button {
+            margin: 0;
+            white-space: nowrap;
+        }
         /* Toast notification styles */
         .toast-container {
             position: fixed;
@@ -165,26 +212,49 @@
             }, 300); // Match animation duration
         }
 
-        // HTMX event listeners for list operations
-        document.body.addEventListener('htmx:afterRequest', function(evt) {
-            if (evt.detail.successful && evt.detail.verb === 'patch') {
-                showToast('Task removed from list successfully!', 'success');
-
-                // Update the task count in the header
-                updateTaskCount();
-            } else if (!evt.detail.successful && evt.detail.verb === 'patch') {
-                showToast('Failed to remove task from list. Please try again.', 'error');
-            }
-        });
-
         // Update the task count displayed in the list header
         function updateTaskCount() {
-            const visibleTasks = document.querySelectorAll('#list-tasks .task-item:not([style*="display: none"])').length;
-            const countElement = document.querySelector('.list-meta');
+            const activeTab = document.querySelector('.tab-content.active');
+            const visibleTasks = activeTab ? activeTab.querySelectorAll('.task-item:not([style*="display: none"]):not([style*="display:none"])').length : 0;
+            const countElement = document.getElementById('task-count');
             if (countElement) {
                 const countText = visibleTasks + ' task' + (visibleTasks !== 1 ? 's' : '');
-                const updatedText = countElement.textContent.replace(/^\d+ tasks?/, countText);
-                countElement.textContent = updatedText;
+                countElement.textContent = countText;
+            }
+        }
+
+        function switchListTab(tabName) {
+            // Remove active class from all tabs and tab contents
+            document.querySelectorAll('.tabs button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Add active class to selected tab and content
+            event.target.classList.add('active');
+            document.getElementById(tabName + '-tab').classList.add('active');
+
+            // Update the task count for the active tab
+            updateTaskCount();
+        }
+
+        function copyShareUrl() {
+            const input = document.getElementById('share-url');
+            input.select();
+            input.setSelectionRange(0, 99999); // For mobile devices
+
+            try {
+                navigator.clipboard.writeText(input.value).then(() => {
+                    showToast('Link copied to clipboard!', 'success');
+                }).catch(() => {
+                    // Fallback for older browsers
+                    document.execCommand('copy');
+                    showToast('Link copied to clipboard!', 'success');
+                });
+            } catch (err) {
+                showToast('Failed to copy link', 'error');
             }
         }
     </script>
@@ -192,6 +262,25 @@
 <body>
     <!-- Toast notification container -->
     <div id="toast-container" class="toast-container"></div>
+
+    <script>
+        // HTMX event listeners for list operations
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            const url = evt.detail.pathInfo && evt.detail.pathInfo.requestPath;
+
+            // Check if this is a list operation
+            if (url && url.includes('/app/lists') && evt.detail.xhr) {
+                if (evt.detail.successful) {
+                    showToast('Task removed from list successfully!', 'success');
+
+                    // Update the task count after a short delay to ensure DOM is updated
+                    setTimeout(updateTaskCount, 50);
+                } else {
+                    showToast('Failed to remove task from list. Please try again.', 'error');
+                }
+            }
+        });
+    </script>
 
     <header class="container">
         <nav>
@@ -213,33 +302,91 @@
             <p>{{.Description}}</p>
             {{end}}
             <div class="list-meta">
-                {{len .TaskURIs}} task{{if ne (len .TaskURIs) 1}}s{{end}}
+                <span id="task-count">{{len .TaskURIs}} task{{if ne (len .TaskURIs) 1}}s{{end}}</span>
                 {{if .UpdatedAt}} • Updated: {{formatDate .UpdatedAt}}{{end}}
             </div>
         </section>
+
+        {{if .OwnerHandle}}
+        <section class="share-section">
+            <h3 style="margin-top: 0; font-size: 1.1rem;">📤 Share This List</h3>
+            <p style="margin-bottom: 0.5rem; font-size: 0.9rem;">Anyone with this link can view your list (read-only):</p>
+            <div class="share-url">
+                <input type="text" id="share-url" readonly value="{{getBaseURL}}/list/@{{.OwnerHandle}}/{{.RKey}}">
+                <button onclick="copyShareUrl()">Copy Link</button>
+            </div>
+        </section>
+        {{end}}
 
         <section>
             <h2>Tasks in this List</h2>
 
             {{if .TaskURIs}}
-            <div id="list-tasks">
-                <!-- Tasks will be loaded here -->
-                {{range .Tasks}}
-                <div class="task-item {{if .Completed}}completed{{end}}">
-                    <h4>{{.Title}}</h4>
-                    {{if .Description}}<p>{{.Description}}</p>{{end}}
-                    <small>Created: {{formatDate .CreatedAt}}</small>
-                    {{if .CompletedAt}}<small> • Completed: {{formatDate .CompletedAt}}</small>{{end}}
+            <!-- Task Tabs -->
+            <div class="tabs">
+                <button class="active" onclick="switchListTab('incomplete')">Incomplete</button>
+                <button onclick="switchListTab('completed')">Completed</button>
+            </div>
 
-                    <div class="task-actions">
-                        <button
-                            hx-patch="/app/lists"
-                            hx-vals='{"rkey": "{{$.RKey}}", "taskUri": "{{.URI}}", "action": "remove"}'
-                            onclick="this.closest('.task-item').style.display='none'">
-                            Remove from List
-                        </button>
-                        <a href="/app#task-{{.RKey}}" style="padding: 0.25rem 0.75rem;">View Task</a>
-                    </div>
+            <!-- Incomplete Tasks Tab -->
+            <div id="incomplete-tab" class="tab-content active">
+                {{$hasIncomplete := false}}
+                {{range .Tasks}}
+                    {{if not .Completed}}
+                        {{$hasIncomplete = true}}
+                        <div class="task-item">
+                            <h4>{{.Title}}</h4>
+                            {{if .Description}}<p>{{.Description}}</p>{{end}}
+                            <small>Created: {{formatDate .CreatedAt}}</small>
+
+                            <div class="task-actions">
+                                <button
+                                    hx-patch="/app/lists"
+                                    hx-vals='{"rkey": "{{$.RKey}}", "taskUri": "{{.URI}}", "action": "remove"}'
+                                    onclick="this.closest('.task-item').style.display='none'">
+                                    Remove from List
+                                </button>
+                                <a href="/app#task-{{.RKey}}" style="padding: 0.25rem 0.75rem;">View Task</a>
+                            </div>
+                        </div>
+                    {{end}}
+                {{end}}
+                {{if not $hasIncomplete}}
+                <div class="empty-state">
+                    <h3>No incomplete tasks</h3>
+                    <p>All tasks in this list are completed!</p>
+                </div>
+                {{end}}
+            </div>
+
+            <!-- Completed Tasks Tab -->
+            <div id="completed-tab" class="tab-content">
+                {{$hasCompleted := false}}
+                {{range .Tasks}}
+                    {{if .Completed}}
+                        {{$hasCompleted = true}}
+                        <div class="task-item completed">
+                            <h4>{{.Title}}</h4>
+                            {{if .Description}}<p>{{.Description}}</p>{{end}}
+                            <small>Created: {{formatDate .CreatedAt}}</small>
+                            {{if .CompletedAt}}<small> • Completed: {{formatDate .CompletedAt}}</small>{{end}}
+
+                            <div class="task-actions">
+                                <button
+                                    hx-patch="/app/lists"
+                                    hx-vals='{"rkey": "{{$.RKey}}", "taskUri": "{{.URI}}", "action": "remove"}'
+                                    onclick="this.closest('.task-item').style.display='none'">
+                                    Remove from List
+                                </button>
+                                <a href="/app#task-{{.RKey}}" style="padding: 0.25rem 0.75rem;">View Task</a>
+                            </div>
+                        </div>
+                    {{end}}
+                {{end}}
+                {{if not $hasCompleted}}
+                <div class="empty-state">
+                    <h3>No completed tasks</h3>
+                    <p>Complete some tasks to see them here.</p>
                 </div>
                 {{end}}
             </div>
