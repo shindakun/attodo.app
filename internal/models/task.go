@@ -9,6 +9,7 @@ type Task struct {
 	Completed   bool       `json:"completed"`
 	CreatedAt   time.Time  `json:"createdAt"`
 	CompletedAt *time.Time `json:"completedAt,omitempty"` // Pointer so it can be nil/omitted
+	Tags        []string   `json:"tags,omitempty"`        // User-defined tags for categorization
 
 	// Metadata from AT Protocol (populated after creation)
 	RKey string `json:"-"` // Record key (extracted from URI)

@@ -5,6 +5,15 @@
         {{if .Description}}
         <p>{{.Description}}</p>
         {{end}}
+
+        {{if .Tags}}
+        <div class="task-tags" style="margin-top: 0.5rem;">
+            {{range .Tags}}
+            <span class="tag" onclick="filterByTag('{{.}}')">{{.}}</span>
+            {{end}}
+        </div>
+        {{end}}
+
         <small>Created: <time class="local-time" datetime="{{formatDate .CreatedAt}}">{{formatDate .CreatedAt}}</time></small>
         {{if .CompletedAt}}
         <small> • Completed: <time class="local-time" datetime="{{formatDate .CompletedAt}}">{{formatDate .CompletedAt}}</time></small>
@@ -25,7 +34,7 @@
         <form
             hx-patch="/app/tasks"
             hx-target="#task-{{.RKey}}"
-            hx-swap="outerHTML"
+            hx-swap="outerHTML swap:500ms"
         >
             <input type="hidden" name="rkey" value="{{.RKey}}">
             <label>
@@ -36,6 +45,13 @@
                 Description
                 <textarea name="description" rows="3">{{.Description}}</textarea>
             </label>
+
+            <label>
+                Tags (comma-separated)
+                <input type="text" name="tags" id="tags-{{.RKey}}" value="{{joinTags .Tags}}" placeholder="work, urgent, personal">
+                <small>Separate tags with commas</small>
+            </label>
+
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
                 <button type="submit">Save</button>
                 <button type="button" onclick="cancelEdit('{{.RKey}}')">Cancel</button>
@@ -54,8 +70,7 @@
             hx-put="/app/tasks"
             hx-vals='{"rkey": "{{.RKey}}"}'
             hx-target="#task-{{.RKey}}"
-            hx-swap="outerHTML"
-            onclick="this.closest('.task-item').classList.add('task-removing')"
+            hx-swap="outerHTML swap:500ms"
         >
             {{if .Completed}}Mark Incomplete{{else}}Mark Complete{{end}}
         </button>
@@ -63,9 +78,8 @@
             class="delete"
             hx-delete="/app/tasks?rkey={{.RKey}}"
             hx-target="#task-{{.RKey}}"
-            hx-swap="outerHTML"
+            hx-swap="outerHTML swap:500ms"
             hx-confirm="Are you sure you want to delete this task?"
-            onclick="this.closest('.task-item').classList.add('task-removing')"
         >
             Delete
         </button>

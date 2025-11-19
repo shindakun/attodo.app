@@ -20,6 +20,11 @@ import (
 
 const TaskCollection = "app.attodo.task"
 
+const (
+	MaxTagsPerTask = 10
+	MaxTagLength   = 30
+)
+
 type TaskHandler struct {
 	client      *bskyoauth.Client
 	listHandler *ListHandler
@@ -66,6 +71,47 @@ func (h *TaskHandler) withRetry(ctx context.Context, sess *bskyoauth.Session, op
 	return sess, err
 }
 
+// parseTags parses and validates tag input from form
+func parseTags(input string) []string {
+	if input == "" {
+		return []string{}
+	}
+
+	// Split by comma
+	rawTags := strings.Split(input, ",")
+
+	// Clean and deduplicate
+	seen := make(map[string]bool)
+	tags := make([]string, 0)
+
+	for _, tag := range rawTags {
+		// Trim whitespace
+		cleaned := strings.TrimSpace(tag)
+		if cleaned == "" {
+			continue
+		}
+
+		// Enforce max length
+		if len(cleaned) > MaxTagLength {
+			cleaned = cleaned[:MaxTagLength]
+		}
+
+		// Deduplicate (case-insensitive)
+		lower := strings.ToLower(cleaned)
+		if !seen[lower] {
+			seen[lower] = true
+			tags = append(tags, cleaned)
+
+			// Enforce max tags
+			if len(tags) >= MaxTagsPerTask {
+				break
+			}
+		}
+	}
+
+	return tags
+}
+
 // parseTaskFields extracts task fields from a record value map
 func parseTaskFields(record map[string]interface{}) models.Task {
 	task := models.Task{}
@@ -89,6 +135,15 @@ func parseTaskFields(record map[string]interface{}) models.Task {
 			task.CompletedAt = &t
 		}
 	}
+	// Parse tags if present
+	if tags, ok := record["tags"].([]interface{}); ok {
+		task.Tags = make([]string, 0, len(tags))
+		for _, tag := range tags {
+			if tagStr, ok := tag.(string); ok {
+				task.Tags = append(task.Tags, tagStr)
+			}
+		}
+	}
 
 	return task
 }
@@ -106,6 +161,13 @@ func buildTaskRecord(task *models.Task) map[string]interface{} {
 	// Add completedAt if task is completed
 	if task.CompletedAt != nil {
 		record["completedAt"] = task.CompletedAt.Format(time.RFC3339)
+	}
+
+	// Always include tags field (even if empty) to allow clearing tags
+	if len(task.Tags) > 0 {
+		record["tags"] = task.Tags
+	} else {
+		record["tags"] = []string{}
 	}
 
 	return record
@@ -145,11 +207,15 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 
 	title := r.FormValue("title")
 	description := r.FormValue("description")
+	tagsInput := r.FormValue("tags")
 
 	if title == "" {
 		http.Error(w, "Title is required", http.StatusBadRequest)
 		return
 	}
+
+	// Parse and clean tags
+	tags := parseTags(tagsInput)
 
 	// Create task record
 	now := time.Now().UTC()
@@ -159,6 +225,11 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		"description": description,
 		"completed":   false,
 		"createdAt":   now.Format(time.RFC3339),
+	}
+
+	// Add tags if present
+	if len(tags) > 0 {
+		record["tags"] = tags
 	}
 
 	// Try to create record with retry logic
@@ -185,6 +256,7 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		Description: description,
 		Completed:   false,
 		CreatedAt:   now,
+		Tags:        tags,
 		RKey:        rkey,
 		URI:         output.Uri,
 	}
@@ -314,6 +386,10 @@ func (h *TaskHandler) handleEditTask(w http.ResponseWriter, r *http.Request) {
 	task.Title = title
 	task.Description = r.FormValue("description")
 
+	// Update tags
+	tagsInput := r.FormValue("tags")
+	task.Tags = parseTags(tagsInput)
+
 	// Build the record for update
 	record := buildTaskRecord(task)
 
@@ -384,10 +460,11 @@ func (h *TaskHandler) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get filter parameter
+	// Get filter parameters
 	filter := r.URL.Query().Get("filter")
+	tagFilter := r.URL.Query().Get("tag")
 
-	log.Printf("Listing tasks for DID: %s (filter: %s)", sess.DID, filter)
+	log.Printf("Listing tasks for DID: %s (filter: %s, tag: %s)", sess.DID, filter, tagFilter)
 
 	// Use com.atproto.repo.listRecords to fetch all tasks
 	var tasks []models.Task
@@ -431,16 +508,31 @@ func (h *TaskHandler) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Filter tasks based on completion status
+	// Filter tasks based on completion status and tags
 	filteredTasks := make([]models.Task, 0)
 	for _, task := range tasks {
-		if filter == "completed" && task.Completed {
-			filteredTasks = append(filteredTasks, task)
-		} else if filter == "incomplete" && !task.Completed {
-			filteredTasks = append(filteredTasks, task)
-		} else if filter == "" {
-			filteredTasks = append(filteredTasks, task)
+		// Apply completion filter
+		if filter == "completed" && !task.Completed {
+			continue
+		} else if filter == "incomplete" && task.Completed {
+			continue
 		}
+
+		// Apply tag filter
+		if tagFilter != "" {
+			hasTag := false
+			for _, tag := range task.Tags {
+				if strings.EqualFold(tag, tagFilter) {
+					hasTag = true
+					break
+				}
+			}
+			if !hasTag {
+				continue
+			}
+		}
+
+		filteredTasks = append(filteredTasks, task)
 	}
 
 	log.Printf("Found %d tasks (filtered: %d)", len(tasks), len(filteredTasks))

@@ -29,9 +29,12 @@
         .task-item.completed h4 {
             text-decoration: line-through;
         }
-        .task-item.htmx-swapping,
-        .task-item.task-removing {
-            display: none;
+        .task-item {
+            transition: opacity 500ms ease-out, transform 500ms ease-out;
+        }
+        .task-item.htmx-swapping {
+            opacity: 0;
+            transform: translateX(-20px);
         }
         .task-actions {
             display: flex;
@@ -222,13 +225,15 @@
         .toast.closing {
             animation: slideOut 0.3s ease-in forwards;
         }
-        /* Loading animation for tasks being added to lists */
-        .task-item.adding-to-list {
+        /* HTMX loading indicator - uses htmx-request class automatically */
+        .task-item.htmx-request,
+        .list-item.htmx-request {
             position: relative;
             pointer-events: none;
             opacity: 0.6;
         }
-        .task-item.adding-to-list::after {
+        .task-item.htmx-request::after,
+        .list-item.htmx-request::after {
             content: '';
             position: absolute;
             top: 50%;
@@ -243,6 +248,40 @@
         }
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+        /* HTMX indicator - shown when htmx-request class is applied */
+        .htmx-indicator {
+            display: none;
+        }
+        .htmx-request .htmx-indicator,
+        .htmx-request.htmx-indicator {
+            display: block;
+        }
+        /* Tag styles */
+        .task-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            background-color: var(--pico-primary-background);
+            color: var(--pico-primary);
+            border: 1px solid var(--pico-primary);
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tag:hover {
+            background-color: var(--pico-primary);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
     </style>
     <script>
@@ -293,8 +332,21 @@
             event.target.classList.add('active');
             document.getElementById(tabName + '-tab').classList.add('active');
 
-            // Reload the tasks for the selected tab
-            htmx.trigger('#' + tabName + '-tasks', 'reload');
+            const tasksContainer = document.getElementById(tabName + '-tasks');
+
+            // If filtering by tag, update the container's URL and trigger reload
+            if (isFilteringByTag && currentFilterTag) {
+                const filter = tabName === 'completed' ? 'completed' : 'incomplete';
+                const url = `/app/tasks?filter=${filter}&tag=${encodeURIComponent(currentFilterTag)}`;
+
+                // Update the hx-get attribute and trigger reload
+                tasksContainer.setAttribute('hx-get', url);
+                htmx.process(tasksContainer);
+                htmx.trigger(tasksContainer, 'reload');
+            } else {
+                // Reload the tasks for the selected tab normally
+                htmx.trigger(tasksContainer, 'reload');
+            }
         }
 
         function startEdit(rkey) {
@@ -375,57 +427,141 @@
 
             // Extract task rkey from URI (e.g., at://did:plc:xxx/app.attodo.task/rkey)
             const taskRKey = taskURI.split('/').pop();
-
-            // Show loading animation on the task
             const taskElement = document.getElementById('task-' + taskRKey);
-            if (taskElement) {
-                taskElement.classList.add('adding-to-list');
+
+            // Get or create hidden form for adding tasks to lists
+            let form = document.getElementById('add-to-list-form');
+            if (!form) {
+                form = document.createElement('form');
+                form.id = 'add-to-list-form';
+                form.style.display = 'none';
+                document.body.appendChild(form);
             }
 
-            // Add task to list using fetch to avoid HTMX content swapping
-            const formData = new URLSearchParams();
-            formData.append('rkey', listRKey);
-            formData.append('taskUri', taskURI);
-            formData.append('action', 'add');
+            // Set form data
+            form.innerHTML = `
+                <input type="hidden" name="rkey" value="${listRKey}">
+                <input type="hidden" name="taskUri" value="${taskURI}">
+                <input type="hidden" name="action" value="add">
+            `;
 
-            fetch('/app/lists', {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: formData
-            })
-            .then(response => {
-                if (response.ok) {
-                    showToast('Task added to list successfully!', 'success');
+            // Configure HTMX to use the existing indicator class
+            const filter = taskElement?.classList.contains('completed') ? 'completed' : 'incomplete';
+            form.setAttribute('hx-patch', '/app/lists');
+            form.setAttribute('hx-swap', 'none'); // Don't swap anything from PATCH response
+            form.setAttribute('hx-indicator', '#task-' + taskRKey);
 
-                    // Reload the specific task item to show updated list membership
-                    if (taskElement) {
-                        htmx.ajax('GET', '/app/tasks?filter=' + (taskElement.classList.contains('completed') ? 'completed' : 'incomplete'), {
-                            target: '#task-' + taskRKey,
-                            swap: 'outerHTML',
-                            select: '#task-' + taskRKey
-                        });
-                    }
-                } else {
-                    showToast('Failed to add task to list. Please try again.', 'error');
-                    // Remove loading animation on error
-                    if (taskElement) {
-                        taskElement.classList.remove('adding-to-list');
-                    }
+            // Process HTMX attributes
+            htmx.process(form);
+
+            // Listen for successful request to reload the task
+            form.addEventListener('htmx:afterRequest', function(evt) {
+                if (evt.detail.successful && taskElement) {
+                    // Use HTMX to reload just this task element
+                    const url = `/app/tasks?filter=${filter}`;
+                    taskElement.setAttribute('hx-get', url);
+                    taskElement.setAttribute('hx-select', '#task-' + taskRKey);
+                    taskElement.setAttribute('hx-swap', 'outerHTML');
+                    htmx.process(taskElement);
+                    htmx.trigger(taskElement, 'load');
                 }
-            })
-            .catch(() => {
-                showToast('Failed to add task to list. Please try again.', 'error');
-                // Remove loading animation on error
-                if (taskElement) {
-                    taskElement.classList.remove('adding-to-list');
-                }
-            });
+            }, { once: true });
+
+            // Submit via HTMX
+            htmx.trigger(form, 'submit');
         }
 
         function closeModal() {
             document.getElementById('list-selector-modal').classList.remove('active');
+        }
+
+        // Global variables to track filtering state
+        let isFilteringByTag = false;
+        let currentFilterTag = '';
+
+        // Tag filtering functions
+        function filterByTag(tag) {
+            // Set filtering flag and store current tag
+            isFilteringByTag = true;
+            currentFilterTag = tag;
+
+            // Hide the Lists tab
+            const listsTabButton = document.querySelector('.tabs button[onclick*="lists"]');
+            if (listsTabButton) {
+                listsTabButton.style.display = 'none';
+            }
+
+            // Get the current tab
+            const activeTab = document.querySelector('.tab-content.active');
+            const filter = activeTab.id === 'completed-tab' ? 'completed' : 'incomplete';
+
+            // Update the URL and reload tasks with tag filter
+            const tasksContainer = activeTab.querySelector('[id$="-tasks"]');
+            const url = `/app/tasks?filter=${filter}&tag=${encodeURIComponent(tag)}`;
+
+            // Update the hx-get attribute and trigger reload
+            tasksContainer.setAttribute('hx-get', url);
+            htmx.process(tasksContainer);
+            htmx.trigger(tasksContainer, 'reload');
+
+            // Show toast
+            showToast(`Filtering by tag: ${tag}`, 'info');
+
+            // Show clear filter button
+            showClearFilterButton(tag);
+        }
+
+        function clearTagFilter() {
+            const activeTab = document.querySelector('.tab-content.active');
+            const filter = activeTab.id === 'completed-tab' ? 'completed' : 'incomplete';
+            const tasksContainer = activeTab.querySelector('[id$="-tasks"]');
+
+            // Reset state BEFORE making the request so updatePopularTags() works correctly
+            isFilteringByTag = false;
+            currentFilterTag = '';
+
+            // Update the hx-get attribute back to normal and trigger reload
+            const url = `/app/tasks?filter=${filter}`;
+            tasksContainer.setAttribute('hx-get', url);
+            htmx.process(tasksContainer);
+
+            // Listen for afterSwap to update UI
+            tasksContainer.addEventListener('htmx:afterSwap', function handler() {
+                hideClearFilterButton();
+
+                // Show the Lists tab again
+                const listsTabButton = document.querySelector('.tabs button[onclick*="lists"]');
+                if (listsTabButton) {
+                    listsTabButton.style.display = '';
+                }
+
+                // Force update of popular tags with all tasks
+                updatePopularTags();
+
+                // Remove this one-time listener
+                tasksContainer.removeEventListener('htmx:afterSwap', handler);
+            }, { once: true });
+
+            htmx.trigger(tasksContainer, 'reload');
+        }
+
+        function showClearFilterButton(tag) {
+            const container = document.getElementById('tag-filter-container');
+            container.innerHTML = `
+                <div style="padding: 0.5rem; background-color: var(--pico-primary-background); border-radius: var(--pico-border-radius); display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 0.875rem;">
+                        Filtering by tag: <strong>${tag}</strong>
+                    </span>
+                    <button onclick="clearTagFilter()" style="padding: 0.25rem 0.5rem; margin: 0;">
+                        Clear Filter
+                    </button>
+                </div>
+            `;
+        }
+
+        function hideClearFilterButton() {
+            const container = document.getElementById('tag-filter-container');
+            container.innerHTML = '';
         }
     </script>
 </head>
@@ -464,6 +600,8 @@
                     if (evt.detail.verb === 'post') {
                         showToast('Task created successfully!', 'success');
                     } else if (evt.detail.verb === 'put') {
+                        showToast('Task updated successfully!', 'success');
+                    } else if (evt.detail.verb === 'patch') {
                         showToast('Task updated successfully!', 'success');
                     } else if (evt.detail.verb === 'delete') {
                         showToast('Task deleted successfully!', 'success');
@@ -527,9 +665,25 @@
                         <textarea name="description" id="description" rows="3"></textarea>
                     </label>
 
+                    <label for="tags">
+                        Tags (optional)
+                        <input type="text" name="tags" id="tags" placeholder="work, urgent, personal">
+                        <small>Separate tags with commas</small>
+                    </label>
+
                     <button type="submit">Add Task</button>
                 </form>
             </article>
+
+            <!-- Tag Filter (if any tasks have tags) -->
+            <div id="tag-filter-container" style="margin-bottom: 1rem;">
+                <!-- This will be populated by HTMX when tasks are loaded -->
+            </div>
+
+            <!-- Popular Tags Widget -->
+            <div id="popular-tags" style="margin-bottom: 1rem;">
+                <!-- Will be populated dynamically -->
+            </div>
 
             <!-- Task Tabs -->
             <div class="tabs">
@@ -540,16 +694,22 @@
 
             <!-- Incomplete Tasks Tab -->
             <div id="incomplete-tab" class="tab-content active">
-                <div id="incomplete-tasks" hx-get="/app/tasks?filter=incomplete" hx-trigger="load, reload from:body" hx-swap="innerHTML">
+                <div id="incomplete-tasks" hx-get="/app/tasks?filter=incomplete" hx-trigger="load, reload from:body" hx-swap="innerHTML" hx-indicator="#tasks-loading">
                     <!-- Incomplete tasks will be loaded here -->
                 </div>
             </div>
 
             <!-- Completed Tasks Tab -->
             <div id="completed-tab" class="tab-content">
-                <div id="completed-tasks" hx-get="/app/tasks?filter=completed" hx-trigger="load, reload from:body" hx-swap="innerHTML">
+                <div id="completed-tasks" hx-get="/app/tasks?filter=completed" hx-trigger="load, reload from:body" hx-swap="innerHTML" hx-indicator="#tasks-loading">
                     <!-- Completed tasks will be loaded here -->
                 </div>
+            </div>
+
+            <!-- Loading indicator for task containers -->
+            <div id="tasks-loading" class="htmx-indicator" style="text-align: center; padding: 2rem; display: none;">
+                <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid var(--pico-primary); border-radius: 50%; border-top-color: transparent; animation: spin 0.8s linear infinite;"></div>
+                <p style="margin-top: 1rem; color: var(--pico-muted-color);">Loading tasks...</p>
             </div>
 
             <!-- Lists Tab -->
@@ -578,8 +738,14 @@
                 </article>
 
                 <!-- Lists Display -->
-                <div id="lists-list" hx-get="/app/lists" hx-trigger="load, reload from:body" hx-swap="innerHTML">
+                <div id="lists-list" hx-get="/app/lists" hx-trigger="load, reload from:body" hx-swap="innerHTML" hx-indicator="#lists-loading">
                     <!-- Lists will be loaded here -->
+                </div>
+
+                <!-- Loading indicator for lists -->
+                <div id="lists-loading" class="htmx-indicator" style="text-align: center; padding: 2rem;">
+                    <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid var(--pico-primary); border-radius: 50%; border-top-color: transparent; animation: spin 0.8s linear infinite;"></div>
+                    <p style="margin-top: 1rem; color: var(--pico-muted-color);">Loading lists...</p>
                 </div>
             </div>
         </section>
@@ -636,6 +802,284 @@
 
         // Re-run after HTMX swaps content
         document.body.addEventListener('htmx:afterSwap', formatLocalTime);
+
+        // Tag autocomplete functionality
+        let selectedSuggestionIndex = -1;
+        let currentSuggestions = [];
+        let allAvailableTags = new Set(); // Store all tags globally
+
+        function updateAvailableTags() {
+            // Always rebuild the tag set from current DOM
+            // This ensures removed tags are properly cleaned up
+            allAvailableTags.clear();
+            document.querySelectorAll('#incomplete-tasks .tag, #completed-tasks .tag').forEach(tag => {
+                allAvailableTags.add(tag.textContent.trim());
+            });
+        }
+
+        function setupTagAutocomplete() {
+            const tagInputs = document.querySelectorAll('input[name="tags"]');
+
+            tagInputs.forEach(input => {
+                // Skip if already set up
+                if (input.dataset.autocompleteSetup === 'true') {
+                    return;
+                }
+                input.dataset.autocompleteSetup = 'true';
+
+                input.addEventListener('input', function(e) {
+                    const value = e.target.value;
+                    const lastComma = value.lastIndexOf(',');
+                    const currentTag = lastComma >= 0 ? value.substring(lastComma + 1).trim() : value.trim();
+
+                    if (currentTag.length >= 2) {
+                        showTagSuggestions(e.target, currentTag);
+                    } else {
+                        hideTagSuggestions();
+                    }
+                });
+
+                // Handle keyboard navigation
+                input.addEventListener('keydown', function(e) {
+                    const dropdown = document.getElementById('tag-suggestions-dropdown');
+                    if (!dropdown || currentSuggestions.length === 0) return;
+
+                    switch(e.key) {
+                        case 'Tab':
+                        case 'Enter':
+                            e.preventDefault();
+                            if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < currentSuggestions.length) {
+                                selectTagSuggestion(currentSuggestions[selectedSuggestionIndex], e.target.id);
+                            }
+                            break;
+                        case 'ArrowDown':
+                            e.preventDefault();
+                            selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, currentSuggestions.length - 1);
+                            highlightSuggestion();
+                            break;
+                        case 'ArrowUp':
+                            e.preventDefault();
+                            selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, 0);
+                            highlightSuggestion();
+                            break;
+                        case 'Escape':
+                            e.preventDefault();
+                            hideTagSuggestions();
+                            break;
+                    }
+                });
+
+                // Close suggestions when input loses focus (with slight delay)
+                input.addEventListener('blur', function() {
+                    setTimeout(hideTagSuggestions, 200);
+                });
+            });
+        }
+
+        function showTagSuggestions(input, searchTerm) {
+            // Parse existing tags from the input to exclude them from suggestions
+            const inputValue = input.value || '';
+            const existingTags = inputValue
+                .split(',')
+                .map(tag => tag.trim().toLowerCase())
+                .filter(tag => tag.length > 0);
+
+            // Use globally stored tags instead of querying DOM
+            // This ensures autocomplete works even when filtering
+            const suggestions = Array.from(allAvailableTags)
+                .filter(tag => {
+                    const tagLower = tag.toLowerCase();
+                    // Exclude tags that are already in the input
+                    if (existingTags.includes(tagLower)) {
+                        return false;
+                    }
+                    // Include tags that match the search term
+                    return tagLower.includes(searchTerm.toLowerCase());
+                })
+                .slice(0, 5); // Limit to 5 suggestions
+
+            if (suggestions.length === 0) {
+                hideTagSuggestions();
+                return;
+            }
+
+            // Store suggestions and reset selection
+            currentSuggestions = suggestions;
+            selectedSuggestionIndex = 0; // Auto-select first suggestion
+
+            // Create or update suggestions dropdown
+            let dropdown = document.getElementById('tag-suggestions-dropdown');
+            if (!dropdown) {
+                dropdown = document.createElement('div');
+                dropdown.id = 'tag-suggestions-dropdown';
+                dropdown.style.cssText = `
+                    position: absolute;
+                    background: var(--pico-background-color);
+                    border: 1px solid var(--pico-muted-border-color);
+                    border-radius: var(--pico-border-radius);
+                    max-width: 300px;
+                    z-index: 1000;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                `;
+                document.body.appendChild(dropdown);
+            }
+
+            // Position dropdown below input
+            const rect = input.getBoundingClientRect();
+            dropdown.style.left = (rect.left + window.scrollX) + 'px';
+            dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+            dropdown.style.width = rect.width + 'px';
+
+            // Populate with suggestions
+            dropdown.innerHTML = suggestions.map((tag, index) => `
+                <div class="tag-suggestion"
+                     data-index="${index}"
+                     style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid var(--pico-muted-border-color); ${index === 0 ? 'background-color: var(--pico-primary-hover-background);' : ''}"
+                     onmouseover="selectedSuggestionIndex = ${index}; highlightSuggestion();"
+                     onclick="selectTagSuggestion('${tag.replace(/'/g, "\\'")}', '${input.id}')">
+                    ${tag}
+                </div>
+            `).join('');
+        }
+
+        function hideTagSuggestions() {
+            const dropdown = document.getElementById('tag-suggestions-dropdown');
+            if (dropdown) {
+                dropdown.remove();
+            }
+            currentSuggestions = [];
+            selectedSuggestionIndex = -1;
+        }
+
+        function highlightSuggestion() {
+            const dropdown = document.getElementById('tag-suggestions-dropdown');
+            if (!dropdown) return;
+
+            const suggestions = dropdown.querySelectorAll('.tag-suggestion');
+            suggestions.forEach((suggestion, index) => {
+                if (index === selectedSuggestionIndex) {
+                    suggestion.style.backgroundColor = 'var(--pico-primary-hover-background)';
+                } else {
+                    suggestion.style.backgroundColor = 'transparent';
+                }
+            });
+        }
+
+        function selectTagSuggestion(tag, inputId) {
+            const input = document.getElementById(inputId);
+            const value = input.value;
+            const lastComma = value.lastIndexOf(',');
+
+            if (lastComma >= 0) {
+                input.value = value.substring(0, lastComma + 1) + ' ' + tag + ', ';
+            } else {
+                input.value = tag + ', ';
+            }
+
+            input.focus();
+            hideTagSuggestions();
+        }
+
+        // Track which containers have been initially loaded
+        let initiallyLoadedContainers = new Set();
+
+        // Run on initial page load
+        updateAvailableTags();
+        setupTagAutocomplete();
+
+        // Run after HTMX swaps - immediate feedback
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            updateAvailableTags();
+            setupTagAutocomplete();
+
+            const targetId = evt.detail.target.id || '';
+
+            // Update popular tags when:
+            // 1. Individual tasks change (created/edited/deleted/toggled)
+            // 2. First time each container loads (initial page load via HTMX)
+            if (targetId.startsWith('task-')) {
+                // Individual task was created/edited/deleted/toggled
+                updatePopularTags();
+            } else if ((targetId === 'incomplete-tasks' || targetId === 'completed-tasks') &&
+                       !initiallyLoadedContainers.has(targetId)) {
+                // First time this specific container loads
+                initiallyLoadedContainers.add(targetId);
+                updatePopularTags();
+            }
+        });
+
+        // Check for filter enforcement AFTER HTMX settle completes
+        // This ensures HTMX's own swap animation has finished before we start ours
+        document.body.addEventListener('htmx:afterSettle', function(evt) {
+            const target = evt.detail.target;
+
+            // For outerHTML swaps on task edit, find the actual task element
+            let taskElement = null;
+            if (target && target.id && target.id.startsWith('task-')) {
+                taskElement = target;
+            } else if (target) {
+                taskElement = target.querySelector('[id^="task-"]');
+            }
+
+            if (isFilteringByTag && currentFilterTag && taskElement) {
+                // Re-query the task element to ensure we have the latest version
+                const freshTaskElement = document.getElementById(taskElement.id);
+                if (!freshTaskElement) return;
+
+                // Check if it still has the filtered tag
+                const taskTags = freshTaskElement.querySelectorAll('.task-tags .tag');
+                let hasFilterTag = false;
+
+                taskTags.forEach(tagEl => {
+                    if (tagEl.textContent.trim().toLowerCase() === currentFilterTag.toLowerCase()) {
+                        hasFilterTag = true;
+                    }
+                });
+
+                // If task no longer has the filter tag, remove it from view
+                // HTMX already animated the swap, so just remove the element
+                if (!hasFilterTag) {
+                    freshTaskElement.remove();
+                }
+            }
+        });
+
+        // Popular tags widget
+        function updatePopularTags() {
+            // Collect all tags from visible tasks
+            // When filtering, this still shows all tags from filtered tasks
+            const tagCounts = {};
+            const tagElements = document.querySelectorAll('#incomplete-tasks .tag, #completed-tasks .tag');
+
+            tagElements.forEach(tag => {
+                const tagText = tag.textContent.trim();
+                tagCounts[tagText] = (tagCounts[tagText] || 0) + 1;
+            });
+
+            // Sort by frequency
+            const sortedTags = Object.entries(tagCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10); // Top 10 tags
+
+            if (sortedTags.length === 0) {
+                document.getElementById('popular-tags').innerHTML = '';
+                return;
+            }
+            const container = document.getElementById('popular-tags');
+            container.innerHTML = `
+                <div style="padding: 1rem; background-color: var(--pico-card-background-color); border-radius: var(--pico-border-radius); border: 1px solid var(--pico-muted-border-color);">
+                    <h6 style="margin: 0 0 0.5rem 0; font-size: 0.875rem; color: var(--pico-muted-color);">Popular Tags</h6>
+                    <div class="task-tags">
+                        ${sortedTags.map(([tag, count]) => `
+                            <span class="tag" onclick="filterByTag('${tag.replace(/'/g, "\\'")}')">
+                                ${tag} (${count})
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
     </script>
 </body>
 </html>

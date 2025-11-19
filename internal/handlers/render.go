@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/shindakun/attodo/internal/config"
@@ -42,6 +43,9 @@ func InitTemplates(cfg *config.Config) error {
 				return appConfig.BaseURL
 			}
 			return ""
+		},
+		"joinTags": func(tags []string) string {
+			return strings.Join(tags, ", ")
 		},
 	}
 

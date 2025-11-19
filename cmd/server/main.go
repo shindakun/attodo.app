@@ -60,10 +60,18 @@ func main() {
 	mux.Handle("/app/lists", authMiddleware.RequireAuth(http.HandlerFunc(listHandler.HandleLists)))
 	mux.Handle("/app/lists/view/", authMiddleware.RequireAuth(http.HandlerFunc(listHandler.HandleListDetail)))
 
+	// Wrap with cache control middleware
+	handler := middleware.NoCacheMiddleware(cfg, mux)
+
 	// Start server
-	log.Printf("Starting server on :%s", cfg.Port)
+	if cfg.IsDev() {
+		log.Printf("Starting server in DEVELOPMENT mode on :%s", cfg.Port)
+		log.Printf("Cache headers disabled for development")
+	} else {
+		log.Printf("Starting server in PRODUCTION mode on :%s", cfg.Port)
+	}
 	log.Printf("Visit %s to get started", cfg.BaseURL)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, mux))
+	log.Fatal(http.ListenAndServe(":"+cfg.Port, handler))
 }
 
 func handleLanding(authHandler *handlers.AuthHandler) http.HandlerFunc {

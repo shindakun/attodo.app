@@ -39,13 +39,14 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		Render(w, "landing.html", nil)
 		return
 	}
+
 	// Delegate to bskyoauth's LoginHandler
 	h.client.LoginHandler()(w, r)
 }
 
 // CallbackSuccess is called after successful OAuth
 func (h *AuthHandler) CallbackSuccess(w http.ResponseWriter, r *http.Request, sessionID string) {
-	log.Printf("OAuth successful, sessionID: %s", sessionID)
+	log.Printf("OAuth callback success, sessionID: %s", sessionID)
 
 	// Store sessionID in simple cookie
 	http.SetCookie(w, &http.Cookie{
@@ -86,30 +87,21 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) GetSession(r *http.Request) (*bskyoauth.Session, error) {
 	cookie, err := r.Cookie("session_id")
 	if err != nil {
-		log.Printf("No session_id cookie found: %v", err)
 		return nil, err
 	}
-
-	log.Printf("Found session_id cookie: %s", cookie.Value)
 
 	session, err := h.client.GetSession(cookie.Value)
 	if err != nil {
-		log.Printf("Failed to get session from client: %v", err)
 		return nil, err
 	}
 
-	log.Printf("Session retrieved successfully for DID: %s", session.DID)
-
 	// Refresh if needed
 	if session.IsAccessTokenExpired(5 * time.Minute) {
-		log.Printf("Token expired, refreshing...")
 		session, err = h.client.RefreshToken(r.Context(), session)
 		if err != nil {
-			log.Printf("Token refresh failed: %v", err)
 			return nil, err
 		}
 		h.client.UpdateSession(cookie.Value, session)
-		log.Printf("Token refreshed successfully")
 	}
 
 	return session, nil
