@@ -176,6 +176,47 @@
         .toast.closing {
             animation: slideOut 0.3s ease-in forwards;
         }
+        /* Tag styles */
+        .task-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+        }
+        .tag {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            background-color: var(--pico-primary-background);
+            color: var(--pico-primary);
+            border: 1px solid var(--pico-primary);
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tag:hover {
+            background-color: var(--pico-primary);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .tag-filter-active {
+            padding: 0.5rem;
+            background-color: var(--pico-primary-background);
+            border-radius: var(--pico-border-radius);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .tag-filter-active span {
+            font-size: 0.875rem;
+        }
+        .tag-filter-active button {
+            padding: 0.25rem 0.5rem;
+            margin: 0;
+        }
     </style>
     <script>
         // Toast notification system
@@ -257,6 +298,76 @@
                 showToast('Failed to copy link', 'error');
             }
         }
+
+        // Tag filtering functionality
+        let currentFilterTag = '';
+
+        function filterByTag(tag) {
+            currentFilterTag = tag;
+
+            // Get all task items in both tabs
+            const allTasks = document.querySelectorAll('.task-item');
+
+            allTasks.forEach(task => {
+                const tags = task.querySelectorAll('.task-tags .tag');
+                let hasTag = false;
+
+                tags.forEach(tagEl => {
+                    if (tagEl.textContent.trim().toLowerCase() === tag.toLowerCase()) {
+                        hasTag = true;
+                    }
+                });
+
+                task.style.display = hasTag ? '' : 'none';
+            });
+
+            showToast(`Filtering by tag: ${tag}`, 'info');
+            showClearFilterButton(tag);
+            updateTaskCount();
+        }
+
+        function clearTagFilter() {
+            currentFilterTag = '';
+
+            // Show all tasks
+            document.querySelectorAll('.task-item').forEach(task => {
+                task.style.display = '';
+            });
+
+            hideClearFilterButton();
+            updateTaskCount();
+        }
+
+        function showClearFilterButton(tag) {
+            const container = document.getElementById('tag-filter-container');
+            container.innerHTML = `
+                <div class="tag-filter-active">
+                    <span>
+                        Filtering by tag: <strong>${tag}</strong>
+                    </span>
+                    <button onclick="clearTagFilter()">
+                        Clear Filter
+                    </button>
+                </div>
+            `;
+        }
+
+        function hideClearFilterButton() {
+            const container = document.getElementById('tag-filter-container');
+            container.innerHTML = '';
+        }
+
+        // Event delegation for tag clicks - navigate to dashboard with filter
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.addEventListener('click', function(evt) {
+                const tag = evt.target.closest('.tag');
+                if (tag && tag.dataset.tag) {
+                    evt.preventDefault();
+                    // Navigate to dashboard with tag filter in URL hash
+                    window.location.href = '/app#filter-tag-' + encodeURIComponent(tag.dataset.tag);
+                }
+            });
+        });
     </script>
 </head>
 <body>
@@ -339,6 +450,9 @@
             <h2>Tasks in this List</h2>
 
             {{if .TaskURIs}}
+            <!-- Tag Filter -->
+            <div id="tag-filter-container"></div>
+
             <!-- Task Tabs -->
             <div class="tabs">
                 <button class="active" onclick="switchListTab('incomplete')">Incomplete</button>
@@ -354,6 +468,15 @@
                         <div class="task-item" id="task-{{.RKey}}">
                             <h4>{{.Title}}</h4>
                             {{if .Description}}<p>{{.Description}}</p>{{end}}
+
+                            {{if .Tags}}
+                            <div class="task-tags">
+                                {{range .Tags}}
+                                <span class="tag" data-tag="{{.}}">{{.}}</span>
+                                {{end}}
+                            </div>
+                            {{end}}
+
                             <small>Created: <time class="local-time" datetime="{{formatDate .CreatedAt}}">{{formatDate .CreatedAt}}</time></small>
 
                             <div class="task-actions">
@@ -392,6 +515,15 @@
                         <div class="task-item completed">
                             <h4>{{.Title}}</h4>
                             {{if .Description}}<p>{{.Description}}</p>{{end}}
+
+                            {{if .Tags}}
+                            <div class="task-tags">
+                                {{range .Tags}}
+                                <span class="tag" data-tag="{{.}}">{{.}}</span>
+                                {{end}}
+                            </div>
+                            {{end}}
+
                             <small>Created: <time class="local-time" datetime="{{formatDate .CreatedAt}}">{{formatDate .CreatedAt}}</time></small>
                             {{if .CompletedAt}}<small> • Completed: <time class="local-time" datetime="{{formatDate .CompletedAt}}">{{formatDate .CompletedAt}}</time></small>{{end}}
 

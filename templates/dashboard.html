@@ -283,6 +283,22 @@
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
+        /* Tag filter active state */
+        .tag-filter-active {
+            padding: 0.5rem;
+            background-color: var(--pico-primary-background);
+            border-radius: var(--pico-border-radius);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .tag-filter-active span {
+            font-size: 0.875rem;
+        }
+        .tag-filter-active button {
+            padding: 0.25rem 0.5rem;
+            margin: 0;
+        }
     </style>
     <script>
         // Toast notification system
@@ -296,6 +312,16 @@
             messageDiv.className = 'toast-message';
             messageDiv.textContent = message;
 
+            // Add support contact for error messages
+            if (type === 'error') {
+                const supportNote = document.createElement('small');
+                supportNote.style.display = 'block';
+                supportNote.style.marginTop = '0.5rem';
+                supportNote.style.opacity = '0.9';
+                supportNote.innerHTML = 'Need help? Contact <a href="https://bsky.app/profile/attodo.app" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline;">@attodo.app</a> on Bluesky';
+                messageDiv.appendChild(supportNote);
+            }
+
             const closeBtn = document.createElement('button');
             closeBtn.className = 'toast-close';
             closeBtn.innerHTML = '&times;';
@@ -306,8 +332,9 @@
             toast.appendChild(closeBtn);
             container.appendChild(toast);
 
-            // Auto-dismiss after duration
-            setTimeout(() => closeToast(toast), duration);
+            // Auto-dismiss after duration (longer for errors)
+            const dismissTime = type === 'error' ? duration * 2 : duration;
+            setTimeout(() => closeToast(toast), dismissTime);
         }
 
         function closeToast(toast) {
@@ -512,47 +539,58 @@
         }
 
         function clearTagFilter() {
-            const activeTab = document.querySelector('.tab-content.active');
-            const filter = activeTab.id === 'completed-tab' ? 'completed' : 'incomplete';
-            const tasksContainer = activeTab.querySelector('[id$="-tasks"]');
-
             // Reset state BEFORE making the request so updatePopularTags() works correctly
             isFilteringByTag = false;
             currentFilterTag = '';
 
-            // Update the hx-get attribute back to normal and trigger reload
-            const url = `/app/tasks?filter=${filter}`;
-            tasksContainer.setAttribute('hx-get', url);
-            htmx.process(tasksContainer);
+            // Reload both task containers to get all tasks back
+            const incompleteContainer = document.getElementById('incomplete-tasks');
+            const completedContainer = document.getElementById('completed-tasks');
 
-            // Listen for afterSwap to update UI
-            tasksContainer.addEventListener('htmx:afterSwap', function handler() {
-                hideClearFilterButton();
+            // Reset their URLs
+            incompleteContainer.setAttribute('hx-get', '/app/tasks?filter=incomplete');
+            completedContainer.setAttribute('hx-get', '/app/tasks?filter=completed');
+            htmx.process(incompleteContainer);
+            htmx.process(completedContainer);
 
-                // Show the Lists tab again
-                const listsTabButton = document.querySelector('.tabs button[onclick*="lists"]');
-                if (listsTabButton) {
-                    listsTabButton.style.display = '';
+            // Track which containers have reloaded
+            let reloadedContainers = 0;
+            const totalContainers = 2;
+
+            function onContainerReloaded() {
+                reloadedContainers++;
+                if (reloadedContainers === totalContainers) {
+                    // Both containers reloaded, update UI
+                    hideClearFilterButton();
+
+                    // Show the Lists tab again
+                    const listsTabButton = document.querySelector('.tabs button[onclick*="lists"]');
+                    if (listsTabButton) {
+                        listsTabButton.style.display = '';
+                    }
+
+                    // Force update of popular tags with all tasks
+                    updatePopularTags();
                 }
+            }
 
-                // Force update of popular tags with all tasks
-                updatePopularTags();
+            // Listen for both containers to reload
+            incompleteContainer.addEventListener('htmx:afterSwap', onContainerReloaded, { once: true });
+            completedContainer.addEventListener('htmx:afterSwap', onContainerReloaded, { once: true });
 
-                // Remove this one-time listener
-                tasksContainer.removeEventListener('htmx:afterSwap', handler);
-            }, { once: true });
-
-            htmx.trigger(tasksContainer, 'reload');
+            // Trigger reload on both
+            htmx.trigger(incompleteContainer, 'reload');
+            htmx.trigger(completedContainer, 'reload');
         }
 
         function showClearFilterButton(tag) {
             const container = document.getElementById('tag-filter-container');
             container.innerHTML = `
-                <div style="padding: 0.5rem; background-color: var(--pico-primary-background); border-radius: var(--pico-border-radius); display: flex; align-items: center; justify-content: space-between;">
-                    <span style="font-size: 0.875rem;">
+                <div class="tag-filter-active">
+                    <span>
                         Filtering by tag: <strong>${tag}</strong>
                     </span>
-                    <button onclick="clearTagFilter()" style="padding: 0.25rem 0.5rem; margin: 0;">
+                    <button onclick="clearTagFilter()">
                         Clear Filter
                     </button>
                 </div>
@@ -567,7 +605,7 @@
 </head>
 <body>
     <!-- Toast notification container -->
-    <div id="toast-container" class="toast-container"></div>
+    <div id="toast-container" class="toast-container" aria-live="polite" role="status"></div>
 
     <script>
         // Register service worker
@@ -676,7 +714,7 @@
             </article>
 
             <!-- Tag Filter (if any tasks have tags) -->
-            <div id="tag-filter-container" style="margin-bottom: 1rem;">
+            <div id="tag-filter-container" style="margin-bottom: 1rem;" aria-live="polite">
                 <!-- This will be populated by HTMX when tasks are loaded -->
             </div>
 
@@ -999,6 +1037,7 @@
             // 2. First time each container loads (initial page load via HTMX)
             if (targetId.startsWith('task-')) {
                 // Individual task was created/edited/deleted/toggled
+                // updatePopularTags() will fetch from server if filtering
                 updatePopularTags();
             } else if ((targetId === 'incomplete-tasks' || targetId === 'completed-tasks') &&
                        !initiallyLoadedContainers.has(targetId)) {
@@ -1046,8 +1085,18 @@
 
         // Popular tags widget
         function updatePopularTags() {
-            // Collect all tags from visible tasks
-            // When filtering, this still shows all tags from filtered tasks
+            // When filtering, we need to fetch all tasks from server since DOM is incomplete
+            if (isFilteringByTag) {
+                updatePopularTagsFromServer();
+                return;
+            }
+
+            // When not filtering, count from DOM (fast)
+            updatePopularTagsFromDOM();
+        }
+
+        function updatePopularTagsFromDOM() {
+            // Collect all tags from visible tasks in DOM
             const tagCounts = {};
             const tagElements = document.querySelectorAll('#incomplete-tasks .tag, #completed-tasks .tag');
 
@@ -1056,6 +1105,43 @@
                 tagCounts[tagText] = (tagCounts[tagText] || 0) + 1;
             });
 
+            renderPopularTags(tagCounts);
+        }
+
+        async function updatePopularTagsFromServer() {
+            // Fetch all tasks from server to get accurate tag counts
+            try {
+                const [incompleteResponse, completedResponse] = await Promise.all([
+                    fetch('/app/tasks?filter=incomplete'),
+                    fetch('/app/tasks?filter=completed')
+                ]);
+
+                const incompleteHTML = await incompleteResponse.text();
+                const completedHTML = await completedResponse.text();
+
+                // Parse HTML to extract tags
+                const parser = new DOMParser();
+                const incompleteDoc = parser.parseFromString(incompleteHTML, 'text/html');
+                const completedDoc = parser.parseFromString(completedHTML, 'text/html');
+
+                const tagCounts = {};
+                const allTags = [
+                    ...incompleteDoc.querySelectorAll('.task-tags .tag'),
+                    ...completedDoc.querySelectorAll('.task-tags .tag')
+                ];
+
+                allTags.forEach(tag => {
+                    const tagText = tag.textContent.trim();
+                    tagCounts[tagText] = (tagCounts[tagText] || 0) + 1;
+                });
+
+                renderPopularTags(tagCounts);
+            } catch (error) {
+                console.error('Failed to fetch tasks for popular tags:', error);
+            }
+        }
+
+        function renderPopularTags(tagCounts) {
             // Sort by frequency
             const sortedTags = Object.entries(tagCounts)
                 .sort((a, b) => b[1] - a[1])
@@ -1065,13 +1151,14 @@
                 document.getElementById('popular-tags').innerHTML = '';
                 return;
             }
+
             const container = document.getElementById('popular-tags');
             container.innerHTML = `
                 <div style="padding: 1rem; background-color: var(--pico-card-background-color); border-radius: var(--pico-border-radius); border: 1px solid var(--pico-muted-border-color);">
                     <h6 style="margin: 0 0 0.5rem 0; font-size: 0.875rem; color: var(--pico-muted-color);">Popular Tags</h6>
                     <div class="task-tags">
                         ${sortedTags.map(([tag, count]) => `
-                            <span class="tag" onclick="filterByTag('${tag.replace(/'/g, "\\'")}')">
+                            <span class="tag" data-tag="${tag.replace(/"/g, '&quot;')}">
                                 ${tag} (${count})
                             </span>
                         `).join('')}
@@ -1079,6 +1166,80 @@
                 </div>
             `;
         }
+
+        // Event delegation for tag clicks
+        document.body.addEventListener('click', function(evt) {
+            const tag = evt.target.closest('.tag');
+            if (tag && tag.dataset.tag) {
+                evt.preventDefault();
+                filterByTag(tag.dataset.tag);
+            }
+        });
+
+        // Handle anchor navigation to tasks and tag filters
+        function handleTaskAnchor() {
+            const hash = window.location.hash;
+
+            // Handle tag filter navigation from list detail page
+            if (hash && hash.startsWith('#filter-tag-')) {
+                const tag = decodeURIComponent(hash.substring(12)); // Remove #filter-tag-
+
+                // Wait for tasks to load, then apply filter
+                setTimeout(() => {
+                    filterByTag(tag);
+                    // Clear the hash after applying filter
+                    history.replaceState(null, null, ' ');
+                }, 200);
+                return;
+            }
+
+            // Handle task navigation
+            if (hash && hash.startsWith('#task-')) {
+                const taskId = hash.substring(1); // Remove the #
+                const taskElement = document.getElementById(taskId);
+
+                if (taskElement) {
+                    // Clear any active filters first
+                    if (isFilteringByTag) {
+                        clearTagFilter();
+                    }
+
+                    // Determine which tab the task is in
+                    const isCompleted = taskElement.closest('#completed-tasks') !== null;
+                    const targetTab = isCompleted ? 'completed' : 'incomplete';
+
+                    // Switch to the correct tab if needed
+                    const currentTab = document.querySelector('.tabs button.active').textContent.toLowerCase();
+                    if (currentTab !== targetTab) {
+                        switchTab(targetTab);
+                    }
+
+                    // Wait for tab switch animation, then scroll and highlight
+                    setTimeout(() => {
+                        taskElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                        // Add a highlight effect
+                        taskElement.style.backgroundColor = 'var(--pico-primary-background)';
+                        taskElement.style.transition = 'background-color 2s ease-out';
+
+                        setTimeout(() => {
+                            taskElement.style.backgroundColor = '';
+                        }, 2000);
+                    }, 100);
+                }
+            }
+        }
+
+        // Run on page load
+        document.addEventListener('DOMContentLoaded', handleTaskAnchor);
+
+        // Run after HTMX loads content
+        document.body.addEventListener('htmx:afterSettle', function(evt) {
+            // Only handle anchors after initial tab loads
+            if (evt.detail.target.id === 'incomplete-tasks' || evt.detail.target.id === 'completed-tasks') {
+                handleTaskAnchor();
+            }
+        });
 
     </script>
 </body>

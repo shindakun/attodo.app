@@ -24,7 +24,10 @@ Once logged in, you'll see the dashboard with the task creation form.
 2. **Add a description (optional)** - Additional details about the task
    - Example: "Include budget breakdown and timeline"
 
-3. **Click "Add Task"** - Your task will be created and appear in the list
+3. **Add tags (optional)** - Organize your task with comma-separated tags
+   - Example: "work, urgent, client-meeting"
+
+4. **Click "Add Task"** - Your task will be created and appear in the list
 
 ## Step 3: Managing Tasks
 
@@ -44,7 +47,7 @@ In the "Completed" tab, click "Mark Incomplete" to move a task back to the incom
 Need to fix a typo or add more details?
 
 1. Click the "Edit" button on any task
-2. Update the title or description
+2. Update the title, description, or tags
 3. Click "Save" to update the task
 4. Click "Cancel" to discard changes
 
@@ -58,16 +61,49 @@ To permanently remove a task:
 
 **Warning:** Deleted tasks cannot be recovered!
 
-## Step 4: Using Tabs
+## Step 4: Using Tags to Organize
 
-AT Todo organizes your tasks into two tabs:
+Tags are a powerful way to organize and categorize your tasks.
+
+### Adding Tags
+
+When creating or editing a task:
+1. Enter tags separated by commas in the tags field
+2. Example: `work, urgent, meeting`
+3. Tags will appear as clickable badges on the task
+
+### Filtering by Tags
+
+Click any tag badge to filter your tasks:
+- Only tasks with that tag will be shown
+- Both incomplete and completed tasks are filtered
+- Click "Clear Filter" to see all tasks again
+
+### Popular Tags Widget
+
+The dashboard shows your most-used tags:
+- Tags are sorted by frequency
+- Click any tag to filter by it
+- Tag counts update automatically
+
+### Tag Autocomplete
+
+When typing tags, you'll see suggestions from your existing tags:
+- Start typing to see matching tags
+- Click a suggestion to use it
+- Helps maintain consistent tag naming
+
+## Step 5: Using Tabs
+
+AT Todo organizes your tasks into tabs:
 
 - **Incomplete** - Tasks that are still pending
 - **Completed** - Tasks you've finished
+- **Lists** - Organized collections of tasks
 
 Click the tab buttons to switch between views. This helps you focus on what needs to be done while keeping a record of completed work.
 
-## Step 5: Install as PWA (Optional)
+## Step 6: Install as PWA (Optional)
 
 AT Todo works as a Progressive Web App, which means you can install it on your device:
 
@@ -85,7 +121,7 @@ AT Todo works as a Progressive Web App, which means you can install it on your d
 - Quick access from your device
 - Native app-like experience
 
-## Step 6: Working Offline
+## Step 7: Working Offline
 
 AT Todo includes offline support:
 
@@ -109,6 +145,15 @@ Save additional information in the description field:
 - Sub-steps
 - Related links or references
 - Notes and context
+
+### Organize with Tags
+Use tags to categorize and group related tasks:
+- **By project**: `client-a`, `website-redesign`, `quarterly-report`
+- **By priority**: `urgent`, `high-priority`, `low-priority`
+- **By context**: `home`, `work`, `errands`, `phone-calls`
+- **By time**: `today`, `this-week`, `someday`
+
+**Tip**: Keep tag names consistent and avoid creating too many similar tags (e.g., use `work` instead of both `work` and `office`).
 
 ### Review Regularly
 - Check your incomplete tasks daily

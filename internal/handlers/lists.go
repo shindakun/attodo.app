@@ -806,6 +806,15 @@ func parseTaskRecord(record map[string]interface{}) *models.Task {
 			task.CompletedAt = &t
 		}
 	}
+	// Parse tags
+	if tags, ok := record["tags"].([]interface{}); ok {
+		task.Tags = make([]string, 0, len(tags))
+		for _, tag := range tags {
+			if tagStr, ok := tag.(string); ok {
+				task.Tags = append(task.Tags, tagStr)
+			}
+		}
+	}
 
 	return task
 }

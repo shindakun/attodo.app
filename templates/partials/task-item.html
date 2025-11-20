@@ -9,7 +9,7 @@
         {{if .Tags}}
         <div class="task-tags" style="margin-top: 0.5rem;">
             {{range .Tags}}
-            <span class="tag" onclick="filterByTag('{{.}}')">{{.}}</span>
+            <span class="tag" data-tag="{{.}}">{{.}}</span>
             {{end}}
         </div>
         {{end}}
