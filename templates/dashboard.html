@@ -645,7 +645,9 @@
                         showToast('Task deleted successfully!', 'success');
                     }
                 } else {
-                    showToast('Operation failed. Please try again.', 'error');
+                    // Extract error message from server response
+                    const errorMsg = evt.detail.xhr?.responseText || 'Operation failed. Please try again.';
+                    showToast(errorMsg, 'error');
                 }
             }
 
@@ -660,7 +662,9 @@
                         showToast('List deleted successfully!', 'success');
                     }
                 } else if (!evt.detail.successful && evt.detail.verb !== 'get') {
-                    showToast('Operation failed. Please try again.', 'error');
+                    // Extract error message from server response
+                    const errorMsg = evt.detail.xhr?.responseText || 'Operation failed. Please try again.';
+                    showToast(errorMsg, 'error');
                 }
             }
         });
@@ -691,7 +695,7 @@
                     hx-post="/app/tasks"
                     hx-target="#incomplete-tasks"
                     hx-swap="afterbegin"
-                    hx-on::after-request="this.reset(); htmx.trigger('#completed-tasks', 'load')"
+                    hx-on::after-request="if(event.detail.successful) { this.reset(); htmx.trigger('#completed-tasks', 'load'); }"
                 >
                     <label for="title">
                         Title
@@ -706,7 +710,7 @@
                     <label for="tags">
                         Tags (optional)
                         <input type="text" name="tags" id="tags" placeholder="work, urgent, personal">
-                        <small>Separate tags with commas</small>
+                        <small>Separate tags with commas (max 10 tags, 30 characters each). Emoji supported! 🎯</small>
                     </label>
 
                     <button type="submit">Add Task</button>
@@ -1240,6 +1244,88 @@
                 handleTaskAnchor();
             }
         });
+
+        // Tag validation constants (must match backend)
+        const MAX_TAGS = 10;
+        const MAX_TAG_LENGTH = 30;
+
+        // Validate and provide feedback for tag inputs
+        function validateTags(input) {
+            const value = input.value;
+            if (!value.trim()) {
+                return { valid: true, tags: [] };
+            }
+
+            const tags = value.split(',').map(t => t.trim()).filter(t => t);
+            const warnings = [];
+
+            // Check tag count
+            if (tags.length > MAX_TAGS) {
+                warnings.push(`Maximum ${MAX_TAGS} tags allowed. Extra tags will be ignored.`);
+            }
+
+            // Check tag lengths
+            const longTags = tags.filter(t => t.length > MAX_TAG_LENGTH);
+            if (longTags.length > 0) {
+                warnings.push(`Tags longer than ${MAX_TAG_LENGTH} characters will be truncated.`);
+            }
+
+            return { valid: true, tags: tags.slice(0, MAX_TAGS), warnings };
+        }
+
+        // Show validation feedback for tag input
+        function showTagValidation(input) {
+            const validation = validateTags(input);
+
+            // Remove any existing feedback
+            const existingFeedback = input.parentElement.querySelector('.tag-validation-feedback');
+            if (existingFeedback) {
+                existingFeedback.remove();
+            }
+
+            if (validation.warnings && validation.warnings.length > 0) {
+                const feedback = document.createElement('small');
+                feedback.className = 'tag-validation-feedback';
+                feedback.style.color = 'var(--pico-color-amber-550)';
+                feedback.style.display = 'block';
+                feedback.style.marginTop = '0.25rem';
+                feedback.textContent = validation.warnings.join(' ');
+
+                const smallElement = input.parentElement.querySelector('small:not(.tag-validation-feedback)');
+                if (smallElement) {
+                    smallElement.insertAdjacentElement('afterend', feedback);
+                } else {
+                    input.insertAdjacentElement('afterend', feedback);
+                }
+            }
+        }
+
+        // Set up tag input validation
+        function setupTagValidation() {
+            const tagInputs = document.querySelectorAll('input[name="tags"]');
+
+            tagInputs.forEach(input => {
+                // Validate on input (with debounce)
+                let validationTimeout;
+                input.addEventListener('input', function() {
+                    clearTimeout(validationTimeout);
+                    validationTimeout = setTimeout(() => {
+                        showTagValidation(input);
+                    }, 500);
+                });
+
+                // Also validate on blur
+                input.addEventListener('blur', function() {
+                    showTagValidation(input);
+                });
+            });
+        }
+
+        // Run validation setup on page load
+        document.addEventListener('DOMContentLoaded', setupTagValidation);
+
+        // Re-run after HTMX swaps (for edit forms)
+        document.body.addEventListener('htmx:afterSwap', setupTagValidation);
 
     </script>
 </body>

@@ -51,16 +51,11 @@ func (h *TaskHandler) withRetry(ctx context.Context, sess *bskyoauth.Session, op
 
 		// Check if it's a DPoP replay error or 401
 		if strings.Contains(err.Error(), "invalid_dpop_proof") || strings.Contains(err.Error(), "401") {
-			log.Printf("DPoP error on attempt %d, refreshing token: %v", attempt+1, err)
-
 			// Refresh the token
 			sess, err = h.client.RefreshToken(ctx, sess)
 			if err != nil {
-				log.Printf("Failed to refresh token: %v", err)
 				return sess, err
 			}
-
-			log.Printf("Token refreshed, retrying operation")
 			continue
 		}
 
@@ -69,6 +64,38 @@ func (h *TaskHandler) withRetry(ctx context.Context, sess *bskyoauth.Session, op
 	}
 
 	return sess, err
+}
+
+// getUserFriendlyError converts PDS/network errors into user-friendly messages
+func getUserFriendlyError(err error, defaultMsg string) string {
+	if err == nil {
+		return defaultMsg
+	}
+
+	errStr := err.Error()
+
+	// Check for specific error types
+	if strings.Contains(errStr, "502") || strings.Contains(errStr, "Bad Gateway") {
+		return "Your PDS server is currently unavailable (502). Please try again in a moment or contact your PDS administrator."
+	}
+	if strings.Contains(errStr, "503") || strings.Contains(errStr, "Service Unavailable") {
+		return "Your PDS server is temporarily unavailable (503). Please try again in a moment."
+	}
+	if strings.Contains(errStr, "504") || strings.Contains(errStr, "Gateway Timeout") {
+		return "Your PDS server timed out (504). Please try again in a moment."
+	}
+	if strings.Contains(errStr, "500") {
+		return "Your PDS server encountered an error (500). Please contact your PDS administrator."
+	}
+	if strings.Contains(errStr, "EOF") || strings.Contains(errStr, "connection") {
+		return "Connection to your PDS server was interrupted. Please check your network connection and try again."
+	}
+	if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "Timeout") {
+		return "Request to your PDS server timed out. Please try again."
+	}
+
+	// Return default message for other errors
+	return defaultMsg
 }
 
 // parseTags parses and validates tag input from form
@@ -242,8 +269,8 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		log.Printf("Failed to create task after retries: %v", err)
-		http.Error(w, "Failed to create task", http.StatusInternalServerError)
+		errMsg := getUserFriendlyError(err, "Failed to create task. Please try again.")
+		http.Error(w, errMsg, http.StatusInternalServerError)
 		return
 	}
 
@@ -260,8 +287,6 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		RKey:        rkey,
 		URI:         output.Uri,
 	}
-
-	log.Printf("Task created: %s", output.Uri)
 
 	// Return HTMX response with new task partial
 	w.Header().Set("Content-Type", "text/html")
@@ -299,7 +324,8 @@ func (h *TaskHandler) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("Failed to get task for update: %v", err)
-		http.Error(w, "Failed to get task", http.StatusInternalServerError)
+		errMsg := getUserFriendlyError(err, "Failed to get task. Please try again.")
+		http.Error(w, errMsg, http.StatusInternalServerError)
 		return
 	}
 
@@ -323,7 +349,8 @@ func (h *TaskHandler) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("Failed to update task after retries: %v", err)
-		http.Error(w, "Failed to update task", http.StatusInternalServerError)
+		errMsg := getUserFriendlyError(err, "Failed to update task. Please try again.")
+		http.Error(w, errMsg, http.StatusInternalServerError)
 		return
 	}
 
@@ -378,7 +405,8 @@ func (h *TaskHandler) handleEditTask(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("Failed to get task for edit: %v", err)
-		http.Error(w, "Failed to get task", http.StatusInternalServerError)
+		errMsg := getUserFriendlyError(err, "Failed to get task. Please try again.")
+		http.Error(w, errMsg, http.StatusInternalServerError)
 		return
 	}
 
@@ -399,7 +427,8 @@ func (h *TaskHandler) handleEditTask(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("Failed to edit task after retries: %v", err)
-		http.Error(w, "Failed to edit task", http.StatusInternalServerError)
+		errMsg := getUserFriendlyError(err, "Failed to edit task. Please try again.")
+		http.Error(w, errMsg, http.StatusInternalServerError)
 		return
 	}
 
@@ -442,7 +471,8 @@ func (h *TaskHandler) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("Failed to delete task after retries: %v", err)
-		http.Error(w, "Failed to delete task", http.StatusInternalServerError)
+		errMsg := getUserFriendlyError(err, "Failed to delete task. Please try again.")
+		http.Error(w, errMsg, http.StatusInternalServerError)
 		return
 	}
 
