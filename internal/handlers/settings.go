@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bluesky-social/indigo/atproto/identity"
+	"github.com/bluesky-social/indigo/atproto/syntax"
 	"github.com/shindakun/attodo/internal/models"
 	"github.com/shindakun/attodo/internal/session"
 	"github.com/shindakun/bskyoauth"
@@ -259,6 +261,13 @@ func (h *SettingsHandler) getRecord(ctx context.Context, sess *bskyoauth.Session
 func (h *SettingsHandler) createRecord(ctx context.Context, sess *bskyoauth.Session, rkey string, record map[string]interface{}) error {
 	log.Printf("createRecord: DID=%s, Collection=%s, RKey=%s", sess.DID, SettingsCollection, rkey)
 
+	// Resolve the actual PDS endpoint for this user (same as tasks does)
+	pdsHost, err := h.resolvePDSEndpoint(ctx, sess.DID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve PDS endpoint: %w", err)
+	}
+	log.Printf("createRecord: Resolved PDS=%s", pdsHost)
+
 	// Add $type field to the record if not present
 	if _, exists := record["$type"]; !exists {
 		record["$type"] = SettingsCollection
@@ -277,8 +286,8 @@ func (h *SettingsHandler) createRecord(ctx context.Context, sess *bskyoauth.Sess
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create the request to the PDS endpoint
-	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.putRecord", sess.PDS)
+	// Create the request to the resolved PDS endpoint
+	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.putRecord", pdsHost)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(bodyJSON)))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -356,4 +365,20 @@ func (h *SettingsHandler) WithRetry(ctx context.Context, sess *bskyoauth.Session
 	}
 
 	return sess, fmt.Errorf("max retries exceeded, last error: %w", lastErr)
+}
+
+// resolvePDSEndpoint resolves the PDS endpoint for a given DID
+func (h *SettingsHandler) resolvePDSEndpoint(ctx context.Context, did string) (string, error) {
+	dir := identity.DefaultDirectory()
+	atid, err := syntax.ParseAtIdentifier(did)
+	if err != nil {
+		return "", err
+	}
+
+	ident, err := dir.Lookup(ctx, *atid)
+	if err != nil {
+		return "", err
+	}
+
+	return ident.PDSEndpoint(), nil
 }
