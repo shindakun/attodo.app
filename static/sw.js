@@ -171,7 +171,9 @@ async function checkDueTasksAndNotify() {
     // Get notification settings from AT Protocol
     let settings = null;
     try {
-      const settingsResponse = await fetch('/app/settings');
+      const settingsResponse = await fetch('/app/settings', {
+        credentials: 'include'
+      });
       if (settingsResponse.ok) {
         settings = await settingsResponse.json();
       }
@@ -207,7 +209,9 @@ async function checkDueTasksAndNotify() {
     }
 
     // Fetch tasks as JSON
-    const tasksResponse = await fetch('/app/tasks?filter=incomplete&format=json');
+    const tasksResponse = await fetch('/app/tasks?filter=incomplete&format=json', {
+      credentials: 'include'
+    });
 
     if (!tasksResponse.ok) {
       return;
