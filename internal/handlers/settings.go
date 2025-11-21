@@ -318,6 +318,7 @@ func (h *SettingsHandler) updateRecord(ctx context.Context, sess *bskyoauth.Sess
 // WithRetry wraps an operation with session refresh on auth failure
 func (h *SettingsHandler) WithRetry(ctx context.Context, sess *bskyoauth.Session, fn func(*bskyoauth.Session) error) (*bskyoauth.Session, error) {
 	const maxRetries = 3
+	var lastErr error
 
 	for i := 0; i < maxRetries; i++ {
 		err := fn(sess)
@@ -325,24 +326,29 @@ func (h *SettingsHandler) WithRetry(ctx context.Context, sess *bskyoauth.Session
 			return sess, nil
 		}
 
+		lastErr = err
+		log.Printf("Operation failed (attempt %d/%d): %v", i+1, maxRetries, err)
+
 		// Check if it's a token expiration error
 		if strings.Contains(err.Error(), "400") || strings.Contains(err.Error(), "401") {
-			log.Printf("Token may be expired, attempting refresh (attempt %d/%d)", i+1, maxRetries)
+			log.Printf("Auth error detected, attempting token refresh")
 
 			// Try to refresh the token
 			newSess, refreshErr := h.client.RefreshToken(ctx, sess)
 			if refreshErr != nil {
-				log.Printf("Failed to refresh token: %v", refreshErr)
-				return sess, err // Return original error
+				log.Printf("Token refresh failed: %v", refreshErr)
+				return sess, fmt.Errorf("failed to refresh token after auth error: %w (original error: %v)", refreshErr, err)
 			}
 
+			log.Printf("Token refreshed successfully, retrying operation")
 			sess = newSess
 			continue
 		}
 
 		// Not a token error, return immediately
+		log.Printf("Non-auth error, not retrying: %v", err)
 		return sess, err
 	}
 
-	return sess, fmt.Errorf("max retries exceeded")
+	return sess, fmt.Errorf("max retries exceeded, last error: %w", lastErr)
 }
