@@ -252,10 +252,14 @@ async function checkDueTasksAndNotify() {
     const data = await tasksResponse.json();
     const tasks = data.tasks || data; // Handle both {tasks: []} and [] formats
 
+    // Group tasks by notification type
+    const groups = {
+      overdue: [],
+      dueToday: [],
+      dueSoon: []
+    };
+
     const now = new Date();
-    let overdueCount = 0;
-    let dueTodayCount = 0;
-    let nextDueTasks = [];
 
     tasks.forEach(task => {
       if (!task.dueDate) return; // Skip tasks without due dates
@@ -264,31 +268,65 @@ async function checkDueTasksAndNotify() {
       const diffHours = (dueDate - now) / (1000 * 60 * 60);
 
       if (diffHours < 0) {
-        overdueCount++;
+        groups.overdue.push(task);
       } else if (diffHours < 24) {
-        dueTodayCount++;
-        nextDueTasks.push({
-          title: task.title,
+        groups.dueToday.push({
+          ...task,
+          dueDate,
+          diffHours
+        });
+      } else if (diffHours < 72) {
+        groups.dueSoon.push({
+          ...task,
           dueDate,
           diffHours
         });
       }
     });
 
-    // Send notifications based on what we found and user preferences
-    if (overdueCount > 0 && settings.notifyOverdue) {
-      await sendNotification(
-        'Overdue Tasks!',
-        `You have ${overdueCount} overdue task${overdueCount > 1 ? 's' : ''}.`,
-        { tag: 'overdue-tasks', badge: '/static/icon-192.png' }
-      );
-    } else if (dueTodayCount > 0 && settings.notifyToday) {
-      // Sort by soonest first
-      nextDueTasks.sort((a, b) => a.diffHours - b.diffHours);
-      const soonest = nextDueTasks[0];
+    // Send grouped notifications
+    await sendGroupedNotifications(groups, settings);
+  } catch (error) {
+    // Error checking tasks for notifications
+  }
+}
 
-      const hoursUntil = Math.floor(soonest.diffHours);
-      const minutesUntil = Math.floor((soonest.diffHours - hoursUntil) * 60);
+// Send grouped notifications to avoid spam (Phase 3.2)
+async function sendGroupedNotifications(groups, settings) {
+  const { overdue, dueToday, dueSoon } = groups;
+
+  // Overdue tasks - highest priority
+  if (overdue.length > 0 && settings.notifyOverdue) {
+    const taskList = overdue
+      .slice(0, 3) // Show up to 3 tasks
+      .map(t => `• ${t.title}`)
+      .join('\n');
+
+    const moreText = overdue.length > 3 ? `\n...and ${overdue.length - 3} more` : '';
+
+    await sendNotification(
+      `${overdue.length} Overdue Task${overdue.length > 1 ? 's' : ''}`,
+      taskList + moreText,
+      {
+        tag: 'overdue-tasks',
+        badge: '/static/icon-192.png',
+        renotify: true,
+        requireInteraction: true // Overdue tasks are important
+      }
+    );
+    return; // Only show one notification at a time
+  }
+
+  // Tasks due today
+  if (dueToday.length > 0 && settings.notifyToday) {
+    // Sort by soonest first
+    dueToday.sort((a, b) => a.diffHours - b.diffHours);
+
+    if (dueToday.length === 1) {
+      // Single task - show specific time
+      const task = dueToday[0];
+      const hoursUntil = Math.floor(task.diffHours);
+      const minutesUntil = Math.floor((task.diffHours - hoursUntil) * 60);
 
       let timeText = '';
       if (hoursUntil > 0) {
@@ -299,12 +337,55 @@ async function checkDueTasksAndNotify() {
 
       await sendNotification(
         'Task Due Soon',
-        `"${soonest.title}" is due ${timeText}.`,
-        { tag: 'due-soon', badge: '/static/icon-192.png' }
+        `"${task.title}" is due ${timeText}.`,
+        {
+          tag: 'due-today',
+          badge: '/static/icon-192.png'
+        }
+      );
+    } else {
+      // Multiple tasks - show grouped notification
+      const taskList = dueToday
+        .slice(0, 3)
+        .map(t => {
+          const hours = Math.floor(t.diffHours);
+          const mins = Math.floor((t.diffHours - hours) * 60);
+          const time = hours > 0 ? `${hours}h` : `${mins}m`;
+          return `• ${t.title} (${time})`;
+        })
+        .join('\n');
+
+      const moreText = dueToday.length > 3 ? `\n...and ${dueToday.length - 3} more` : '';
+
+      await sendNotification(
+        `${dueToday.length} Tasks Due Today`,
+        taskList + moreText,
+        {
+          tag: 'due-today',
+          badge: '/static/icon-192.png'
+        }
       );
     }
-  } catch (error) {
-    // Error checking tasks for notifications
+    return; // Only show one notification at a time
+  }
+
+  // Tasks due soon (within 3 days)
+  if (dueSoon.length > 0 && settings.notifySoon) {
+    const taskList = dueSoon
+      .slice(0, 3)
+      .map(t => `• ${t.title}`)
+      .join('\n');
+
+    const moreText = dueSoon.length > 3 ? `\n...and ${dueSoon.length - 3} more` : '';
+
+    await sendNotification(
+      `${dueSoon.length} Task${dueSoon.length > 1 ? 's' : ''} Due Soon`,
+      taskList + moreText,
+      {
+        tag: 'due-soon',
+        badge: '/static/icon-192.png'
+      }
+    );
   }
 }
 

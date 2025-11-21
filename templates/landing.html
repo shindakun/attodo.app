@@ -45,6 +45,17 @@
         article h2 {
             font-size: 1.5rem;
         }
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        @media (max-width: 768px) {
+            .pricing-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -129,6 +140,44 @@
                     <li>Simple, clean interface</li>
                     <li>Progressive Web App support</li>
                 </ul>
+            </article>
+
+            <article>
+                <h3>Pricing</h3>
+                <div class="pricing-grid">
+                    <div style="padding: 1.5rem; border: 2px solid var(--pico-primary); border-radius: var(--pico-border-radius); background-color: var(--pico-card-background-color);">
+                        <h4 style="margin-top: 0; color: var(--pico-primary);">Free</h4>
+                        <p style="font-size: 2rem; font-weight: bold; margin: 0.5rem 0;">$0</p>
+                        <p style="font-size: 0.875rem; color: var(--pico-muted-color); margin-bottom: 1rem;">"forever"</p>
+                        <ul style="list-style: none; padding-left: 0; margin: 1rem 0;">
+                            <li style="margin-bottom: 0.5rem;">✅ Unlimited tasks</li>
+                            <li style="margin-bottom: 0.5rem;">✅ Unlimited lists</li>
+                            <li style="margin-bottom: 0.5rem;">✅ All features included</li>
+                            <li style="margin-bottom: 0.5rem;">✅ Your data, your control</li>
+                            <li style="margin-bottom: 0.5rem;">✅ No ads, ever</li>
+                        </ul>
+                        <p style="font-size: 0.75rem; color: var(--pico-muted-color); margin-top: 1rem;">
+                            Free as long as we can keep the server up and want to develop the software.
+                            You're soaking in it! Just log in and get started!
+                        </p>
+                    </div>
+
+                    <div style="padding: 1.5rem; border: 2px solid var(--pico-primary); border-radius: var(--pico-border-radius); background-color: var(--pico-card-background-color);">
+                        <h4 style="margin-top: 0; color: var(--pico-primary);">Supporter ⭐</h4>
+                        <p style="font-size: 2rem; font-weight: bold; margin: 0.5rem 0;">$24</p>
+                        <p style="font-size: 0.875rem; color: var(--pico-color); margin-bottom: 1rem;">per year</p>
+                        <ul style="list-style: none; padding-left: 0; margin: 1rem 0;">
+                            <li style="margin-bottom: 0.5rem;">⭐ A gold star in the UI!</li>
+                            <li style="margin-bottom: 0.5rem;">💙 Support development</li>
+                            <li style="margin-bottom: 0.5rem;">💙 Help cover server costs</li>
+                            <li style="margin-bottom: 0.5rem;">💙 Help keep it free for everyone</li>
+                            <li style="margin-bottom: 0.5rem;">💙 Our eternal gratitude</li>
+                        </ul>
+                        <p style="font-size: 0.75rem; color: var(--pico-color); opacity: 0.8; margin-top: 1rem;">
+                            Coming soon! We're working on setting up supporter subscriptions.
+                        </p>
+                    </div>
+                </div>
             </article>
 
             <article>

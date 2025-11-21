@@ -46,15 +46,17 @@ func (t *Task) IsOverdue() bool {
 	now := time.Now()
 	due := t.DueDate.In(now.Location())
 
-	// Set time to start of day for fair comparison
-	dueDay := time.Date(due.Year(), due.Month(), due.Day(), 0, 0, 0, 0, now.Location())
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	return dueDay.Before(today)
+	// Check if the actual due time (including time component) has passed
+	return due.Before(now)
 }
 
-// IsDueToday returns true if task is due today
+// IsDueToday returns true if task is due today (but not overdue)
 func (t *Task) IsDueToday() bool {
 	if t.DueDate == nil {
+		return false
+	}
+	// Don't mark as "due today" if it's already overdue
+	if t.IsOverdue() {
 		return false
 	}
 	// Compare in local timezone, not UTC

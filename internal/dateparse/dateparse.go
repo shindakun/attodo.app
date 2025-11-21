@@ -50,6 +50,20 @@ func Parse(title string, referenceTime time.Time) ParseResult {
 		}
 	}
 
+	// If no date was found, check if there's a time specified (e.g., "due at 9am")
+	// If so, assume today's date with that time
+	if result.DueDate == nil {
+		if timeVal, timeOriginal, timeCleaned := parseTime(title); timeVal != nil {
+			// Use today's date with the specified time
+			year, month, day := referenceTime.Year(), referenceTime.Month(), referenceTime.Day()
+			hour, min, _ := timeVal.Clock()
+			today := time.Date(year, month, day, hour, min, 0, 0, referenceTime.Location())
+			result.DueDate = &today
+			result.OriginalDate = timeOriginal
+			result.CleanedTitle = normalizeWhitespace(timeCleaned)
+		}
+	}
+
 	return result
 }
 

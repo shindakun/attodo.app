@@ -1665,6 +1665,69 @@
         // Re-check every 5 minutes
         notificationCheckInterval = setInterval(checkForUpcomingTasks, 5 * 60 * 1000);
 
+        // ============================================================================
+        // SMART NOTIFICATION SCHEDULING (Phase 3.1)
+        // ============================================================================
+
+        // Track when users typically check the app
+        let usageTrackingTimeout = null;
+
+        async function trackAppUsage() {
+            const hour = new Date().getHours();
+
+            try {
+                // Load current settings
+                const settings = await loadSettings();
+
+                if (!settings.appUsageHours) {
+                    settings.appUsageHours = {};
+                }
+
+                // Increment usage count for this hour
+                settings.appUsageHours[hour] = (settings.appUsageHours[hour] || 0) + 1;
+
+                // Debounce: only save after 5 seconds of inactivity
+                clearTimeout(usageTrackingTimeout);
+                usageTrackingTimeout = setTimeout(async () => {
+                    try {
+                        await saveSettings(settings);
+                        console.log('Usage pattern updated for hour:', hour);
+                    } catch (error) {
+                        console.error('Failed to save usage pattern:', error);
+                    }
+                }, 5000);
+            } catch (error) {
+                console.error('Failed to track app usage:', error);
+            }
+        }
+
+        // Find optimal notification times based on usage patterns
+        async function getOptimalNotificationHours() {
+            try {
+                const settings = await loadSettings();
+                const usage = settings.appUsageHours || {};
+
+                // Get top 3 most active hours
+                const hours = Object.entries(usage)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3)
+                    .map(([hour]) => parseInt(hour));
+
+                return hours.length > 0 ? hours : [9, 14, 18]; // Default: morning, afternoon, evening
+            } catch (error) {
+                console.error('Failed to get optimal notification hours:', error);
+                return [9, 14, 18]; // Fallback defaults
+            }
+        }
+
+        // Track app usage on page load and user interactions
+        document.addEventListener('DOMContentLoaded', trackAppUsage);
+        document.body.addEventListener('click', () => {
+            // Debounced tracking on any user interaction
+            clearTimeout(usageTrackingTimeout);
+            usageTrackingTimeout = setTimeout(trackAppUsage, 60000); // Track once per minute max
+        });
+
     </script>
 
     <!-- Command Bar -->

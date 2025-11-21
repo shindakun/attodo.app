@@ -2,6 +2,8 @@
 
 This guide will help you get started with AT Todo and create your first task.
 
+**Good news!** AT Todo is completely free to use with all features included. We also offer an optional Supporter tier ($24/year) for those who want to help support development and server costs. See our [pricing details](/docs#pricing) for more information.
+
 ## Step 1: Login with Bluesky
 
 AT Todo uses your existing Bluesky account for authentication.
@@ -16,7 +18,24 @@ AT Todo uses your existing Bluesky account for authentication.
 
 ## Step 2: Create Your First Task
 
-Once logged in, you'll see the dashboard with the task creation form.
+Once logged in, you have multiple ways to create tasks:
+
+### Quick Method: Command Bar
+
+The fastest way to create tasks is using the command bar:
+
+1. Press **Cmd+Shift+P** (Mac) or **Ctrl+Shift+P** (Windows/Linux)
+2. Type your task naturally: `call client tomorrow at 3pm, discuss pricing #work`
+3. Press Enter
+4. Task is created instantly!
+
+The command bar understands:
+- **Natural dates**: "tomorrow", "next friday", "in 2 hours"
+- **Times**: "at 3pm", "9:30am"
+- **Hashtags**: #work, #urgent (automatically become tags)
+- **Descriptions**: Everything after a comma
+
+### Traditional Method: Task Form
 
 1. **Enter a title** - A brief description of what needs to be done
    - Example: "Finish project proposal"
@@ -24,10 +43,28 @@ Once logged in, you'll see the dashboard with the task creation form.
 2. **Add a description (optional)** - Additional details about the task
    - Example: "Include budget breakdown and timeline"
 
-3. **Add tags (optional)** - Organize your task with comma-separated tags
+3. **Set a due date (optional)** - When the task should be completed
+   - Use the date picker or type naturally in the title
+   - Add a time if needed
+
+4. **Add tags (optional)** - Organize your task with comma-separated tags
    - Example: "work, urgent, client-meeting"
 
-4. **Click "Add Task"** - Your task will be created and appear in the list
+5. **Click "Add Task"** - Your task will be created and appear in the list
+
+### Natural Language Examples
+
+You can type dates and times naturally in the title:
+
+- `submit report tomorrow`
+- `meeting next friday at 2pm`
+- `call back in 30 minutes`
+- `review document 11/26 at 3:30pm`
+
+AT Todo will automatically:
+- Extract the date and time
+- Set the due date on the task
+- Clean up the title
 
 ## Step 3: Managing Tasks
 
@@ -103,7 +140,43 @@ AT Todo organizes your tasks into tabs:
 
 Click the tab buttons to switch between views. This helps you focus on what needs to be done while keeping a record of completed work.
 
-## Step 6: Install as PWA (Optional)
+## Step 6: Enable Notifications (Optional)
+
+Stay on top of your tasks with smart notifications.
+
+### Setting Up Notifications
+
+1. Click the **Settings** icon (gear) in the dashboard
+2. Click **"Enable Push Notifications"**
+3. Grant permission when your browser prompts you
+4. Configure your notification preferences
+
+### Notification Options
+
+- **Overdue tasks**: Get notified about tasks past their due date
+- **Due today**: Alerts for tasks due within 24 hours
+- **Due soon**: Reminders for tasks due within 3 days
+- **Check frequency**: How often to check (15 min to 2 hours)
+- **Quiet hours**: Set do-not-disturb times (e.g., 10 PM - 8 AM)
+
+### Types of Notifications
+
+**In-App Banner:**
+- Appears at top of dashboard
+- Shows overdue and upcoming task counts
+- Updates automatically
+
+**Push Notifications:**
+- Work even when AT Todo is closed
+- Smart grouping to avoid spam
+- Click to open AT Todo
+
+**Example notifications:**
+- "Task Due Soon: 'Call client' is due in 2 hours"
+- "3 Tasks Due Today" (with list of tasks)
+- "5 Overdue Tasks" (grouped to avoid spam)
+
+## Step 7: Install as PWA (Optional)
 
 AT Todo works as a Progressive Web App, which means you can install it on your device:
 
@@ -120,8 +193,10 @@ AT Todo works as a Progressive Web App, which means you can install it on your d
 ### Benefits of Installing
 - Quick access from your device
 - Native app-like experience
+- Better notification support
+- Faster loading with offline caching
 
-## Step 7: Working Offline
+## Step 8: Working Offline
 
 AT Todo includes offline support:
 
@@ -197,8 +272,11 @@ Sessions expire for security after a period of inactivity.
 
 Now that you're familiar with the basics, you can:
 
-- Start organizing your tasks effectively
-- Explore the [Technical Details](/docs/technical) to learn how AT Todo works
+- Master the **command bar** (Cmd+Shift+P) for ultra-fast task creation
+- Learn about **natural language date parsing** in the [Features Guide](/docs/features)
+- Set up **smart notifications** to never miss a deadline
+- Create **lists** to organize related tasks
+- Read the [Features Guide](/docs/features) for advanced tips and tricks
 - Check the [main documentation](/docs) for more information
 
 Happy task managing! 🎯

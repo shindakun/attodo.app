@@ -838,6 +838,101 @@ func TestParseTimeBasedRelative(t *testing.T) {
 	}
 }
 
+func TestParseTimeWithoutDate(t *testing.T) {
+	refTime := time.Date(2024, 11, 20, 12, 0, 0, 0, time.UTC) // Wednesday, Nov 20, 2024 at noon
+
+	tests := []struct {
+		name          string
+		input         string
+		expectedDay   int
+		expectedMonth time.Month
+		expectedHour  int
+		expectedMin   int
+		shouldFind    bool
+	}{
+		{
+			name:          "at 9am without date",
+			input:         "this is a test task due at 9am",
+			expectedDay:   20,
+			expectedMonth: time.November,
+			expectedHour:  9,
+			expectedMin:   0,
+			shouldFind:    true,
+		},
+		{
+			name:          "at 3pm without date",
+			input:         "meeting at 3pm",
+			expectedDay:   20,
+			expectedMonth: time.November,
+			expectedHour:  15,
+			expectedMin:   0,
+			shouldFind:    true,
+		},
+		{
+			name:          "at 10:30am without date",
+			input:         "standup at 10:30am",
+			expectedDay:   20,
+			expectedMonth: time.November,
+			expectedHour:  10,
+			expectedMin:   30,
+			shouldFind:    true,
+		},
+		{
+			name:          "due at 5:45pm without date",
+			input:         "submit report due at 5:45pm",
+			expectedDay:   20,
+			expectedMonth: time.November,
+			expectedHour:  17,
+			expectedMin:   45,
+			shouldFind:    true,
+		},
+		{
+			name:          "9am without 'at'",
+			input:         "standup 9am",
+			expectedDay:   20,
+			expectedMonth: time.November,
+			expectedHour:  9,
+			expectedMin:   0,
+			shouldFind:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.input, refTime)
+
+			if tt.shouldFind {
+				if result.DueDate == nil {
+					t.Errorf("Expected to find date, but got nil")
+					return
+				}
+
+				if result.DueDate.Day() != tt.expectedDay {
+					t.Errorf("Expected day %d, got %d", tt.expectedDay, result.DueDate.Day())
+				}
+				if result.DueDate.Month() != tt.expectedMonth {
+					t.Errorf("Expected month %v, got %v", tt.expectedMonth, result.DueDate.Month())
+				}
+				if result.DueDate.Hour() != tt.expectedHour {
+					t.Errorf("Expected hour %d, got %d", tt.expectedHour, result.DueDate.Hour())
+				}
+				if result.DueDate.Minute() != tt.expectedMin {
+					t.Errorf("Expected minute %d, got %d", tt.expectedMin, result.DueDate.Minute())
+				}
+
+				// Check that time was removed from title
+				if result.CleanedTitle == tt.input {
+					t.Errorf("Title was not cleaned: %s", result.CleanedTitle)
+				}
+			} else {
+				if result.DueDate != nil {
+					t.Errorf("Expected no date, but found %v", result.DueDate)
+				}
+			}
+		})
+	}
+}
+
 func TestParseAdditionalNaturalLanguage(t *testing.T) {
 	refTime := time.Date(2024, 11, 20, 12, 0, 0, 0, time.UTC) // Wednesday, Nov 20, 2024
 
