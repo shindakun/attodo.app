@@ -220,8 +220,7 @@ func (h *SettingsHandler) getRecord(ctx context.Context, sess *bskyoauth.Session
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+sess.AccessToken)
-
+	// DPoP transport handles authorization automatically - do not set Authorization header manually
 	transport := bskyoauth.NewDPoPTransport(http.DefaultTransport, sess.DPoPKey, sess.AccessToken, sess.DPoPNonce)
 	client := &http.Client{
 		Transport: transport,
@@ -282,8 +281,8 @@ func (h *SettingsHandler) createRecord(ctx context.Context, sess *bskyoauth.Sess
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+sess.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
+	// DPoP transport handles authorization automatically - do not set Authorization header manually
 
 	transport := bskyoauth.NewDPoPTransport(http.DefaultTransport, sess.DPoPKey, sess.AccessToken, sess.DPoPNonce)
 	client := &http.Client{
