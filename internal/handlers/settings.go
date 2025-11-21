@@ -259,10 +259,12 @@ func (h *SettingsHandler) getRecord(ctx context.Context, sess *bskyoauth.Session
 func (h *SettingsHandler) createRecord(ctx context.Context, sess *bskyoauth.Session, rkey string, record map[string]interface{}) error {
 	log.Printf("createRecord: DID=%s, Collection=%s, RKey=%s", sess.DID, SettingsCollection, rkey)
 
+	// Add $type field to the record if not present
 	if _, exists := record["$type"]; !exists {
 		record["$type"] = SettingsCollection
 	}
 
+	// Build the request body
 	body := map[string]interface{}{
 		"repo":       sess.DID,
 		"collection": SettingsCollection,
@@ -275,33 +277,37 @@ func (h *SettingsHandler) createRecord(ctx context.Context, sess *bskyoauth.Sess
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	// Create the request to the PDS endpoint
 	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.putRecord", sess.PDS)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, io.NopCloser(strings.NewReader(string(bodyJSON))))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(bodyJSON)))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	// DPoP transport handles authorization automatically - do not set Authorization header manually
 
-	transport := bskyoauth.NewDPoPTransport(http.DefaultTransport, sess.DPoPKey, sess.AccessToken, sess.DPoPNonce)
-	client := &http.Client{
-		Transport: transport,
+	// Create DPoP transport for authentication - do NOT set Authorization header manually
+	dpopTransport := bskyoauth.NewDPoPTransport(
+		http.DefaultTransport,
+		sess.DPoPKey,
+		sess.AccessToken,
+		sess.DPoPNonce,
+	)
+
+	httpClient := &http.Client{
+		Transport: dpopTransport,
 		Timeout:   10 * time.Second,
 	}
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if dpopTransport, ok := transport.(bskyoauth.DPoPTransport); ok {
-		sess.DPoPNonce = dpopTransport.GetNonce()
-	}
-
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Printf("createRecord: HTTP %d: %s", resp.StatusCode, string(bodyBytes))
 		return fmt.Errorf("XRPC ERROR %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
