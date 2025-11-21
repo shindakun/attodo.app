@@ -69,11 +69,13 @@
             <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem;">
                 <label>
                     Due Date (optional)
-                    <input type="date" name="dueDate" value="{{if .DueDate}}{{formatDateInput .DueDate}}{{end}}">
+                    <input type="date" name="dueDate" id="dueDate-{{.RKey}}"
+                           {{if .DueDate}}data-utc-date="{{formatDate .DueDate}}"{{end}}>
                 </label>
                 <label>
                     Time (optional)
-                    <input type="time" name="dueTime" value="{{if .DueDate}}{{formatTimeInput .DueDate}}{{end}}">
+                    <input type="time" name="dueTime" id="dueTime-{{.RKey}}"
+                           {{if .DueDate}}data-utc-date="{{formatDate .DueDate}}"{{end}}>
                 </label>
             </div>
             <small style="display: block; margin-top: -0.5rem; margin-bottom: 0.5rem;">Or type date/time in title (e.g., "tomorrow at 3pm" or "11/26 3:30pm meeting")</small>

@@ -268,6 +268,77 @@ func parseRelativeDate(text string, refTime time.Time) (*time.Time, string, stri
 		}
 	}
 
+	// Try time-based relative dates: "in 2 hours", "in 30 minutes", "2 hours from now"
+	timePatterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\b(?:in\s+)?(\d+)\s+(hour|hours)(?:\s+from\s+now)?\b`),
+		regexp.MustCompile(`(?i)\b(?:in\s+)?(\d+)\s+(minute|minutes|min|mins)(?:\s+from\s+now)?\b`),
+	}
+
+	for _, pattern := range timePatterns {
+		matches := pattern.FindStringSubmatch(text)
+		if len(matches) >= 3 {
+			original := matches[0]
+			num, _ := strconv.Atoi(matches[1])
+			unit := strings.ToLower(matches[2])
+
+			var duration time.Duration
+			if strings.HasPrefix(unit, "hour") {
+				duration = time.Duration(num) * time.Hour
+			} else {
+				// minutes
+				duration = time.Duration(num) * time.Minute
+			}
+
+			date := refTime.Add(duration)
+			cleaned := strings.Replace(text, original, "", 1)
+			return &date, original, cleaned
+		}
+	}
+
+	// Try text-based time offsets: "in two hours", "in thirty minutes", "an hour"
+	textTimePatterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\b(?:in\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a|an)\s+(hour|hours)\b`),
+		regexp.MustCompile(`(?i)\b(?:in\s+)?(fifteen|thirty|forty-five)\s+(minute|minutes)\b`),
+	}
+
+	for _, pattern := range textTimePatterns {
+		matches := pattern.FindStringSubmatch(text)
+		if len(matches) >= 3 {
+			original := matches[0]
+			numText := matches[1]
+			unit := strings.ToLower(matches[2])
+
+			var num int
+			var ok bool
+			if numText == "fifteen" {
+				num = 15
+				ok = true
+			} else if numText == "thirty" {
+				num = 30
+				ok = true
+			} else if numText == "forty-five" {
+				num = 45
+				ok = true
+			} else {
+				num, ok = textToNumber(numText)
+			}
+
+			if ok {
+				var duration time.Duration
+				if strings.HasPrefix(unit, "hour") {
+					duration = time.Duration(num) * time.Hour
+				} else {
+					// minutes
+					duration = time.Duration(num) * time.Minute
+				}
+
+				date := refTime.Add(duration)
+				cleaned := strings.Replace(text, original, "", 1)
+				return &date, original, cleaned
+			}
+		}
+	}
+
 	// Try special period patterns: "end of month", "end of week", "next quarter", "next month", "next year"
 	specialPatterns := []struct {
 		regex   *regexp.Regexp

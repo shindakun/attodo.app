@@ -33,13 +33,15 @@ func InitTemplates(cfg *config.Config) error {
 			}
 		},
 		"formatDateInput": func(t interface{}) string {
-			// Format for HTML date input (YYYY-MM-DD)
+			// Format for HTML date input (YYYY-MM-DD) in local time
 			switch v := t.(type) {
 			case time.Time:
-				return v.Format("2006-01-02")
+				local := v.Local()
+				return local.Format("2006-01-02")
 			case *time.Time:
 				if v != nil {
-					return v.Format("2006-01-02")
+					local := v.Local()
+					return local.Format("2006-01-02")
 				}
 				return ""
 			default:
@@ -47,21 +49,25 @@ func InitTemplates(cfg *config.Config) error {
 			}
 		},
 		"formatTimeInput": func(t interface{}) string {
-			// Format for HTML time input (HH:MM)
+			// Format for HTML time input (HH:MM) in local time
 			switch v := t.(type) {
 			case time.Time:
-				// Only return time if it's not midnight (00:00)
-				if v.Hour() == 0 && v.Minute() == 0 {
+				// Convert to local time
+				local := v.Local()
+				// Only return time if it's not midnight (00:00) in LOCAL time
+				if local.Hour() == 0 && local.Minute() == 0 {
 					return ""
 				}
-				return v.Format("15:04")
+				return local.Format("15:04")
 			case *time.Time:
 				if v != nil {
-					// Only return time if it's not midnight (00:00)
-					if v.Hour() == 0 && v.Minute() == 0 {
+					// Convert to local time
+					local := v.Local()
+					// Only return time if it's not midnight (00:00) in LOCAL time
+					if local.Hour() == 0 && local.Minute() == 0 {
 						return ""
 					}
-					return v.Format("15:04")
+					return local.Format("15:04")
 				}
 				return ""
 			default:

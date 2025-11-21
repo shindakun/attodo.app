@@ -698,6 +698,146 @@ func TestParseTime(t *testing.T) {
 	}
 }
 
+func TestParseTimeBasedRelative(t *testing.T) {
+	refTime := time.Date(2024, 11, 20, 14, 30, 0, 0, time.UTC) // Wednesday, Nov 20, 2024 at 2:30 PM
+
+	tests := []struct {
+		name          string
+		input         string
+		expectedHour  int
+		expectedMin   int
+		expectedDay   int
+		expectedMonth time.Month
+		shouldFind    bool
+	}{
+		{
+			name:          "in 2 hours",
+			input:         "this is due in 2 hours",
+			expectedHour:  16,
+			expectedMin:   30,
+			expectedDay:   20,
+			expectedMonth: time.November,
+			shouldFind:    true,
+		},
+		{
+			name:          "in two hours",
+			input:         "this is due in two hours",
+			expectedHour:  16,
+			expectedMin:   30,
+			expectedDay:   20,
+			expectedMonth: time.November,
+			shouldFind:    true,
+		},
+		{
+			name:          "2 hours",
+			input:         "meeting 2 hours from now",
+			expectedHour:  16,
+			expectedMin:   30,
+			expectedDay:   20,
+			expectedMonth: time.November,
+			shouldFind:    true,
+		},
+		{
+			name:          "in 30 minutes",
+			input:         "call back in 30 minutes",
+			expectedHour:  15,
+			expectedMin:   0,
+			expectedDay:   20,
+			expectedMonth: time.November,
+			shouldFind:    true,
+		},
+		{
+			name:          "in thirty minutes",
+			input:         "reminder in thirty minutes",
+			expectedHour:  15,
+			expectedMin:   0,
+			expectedDay:   20,
+			expectedMonth: time.November,
+			shouldFind:    true,
+		},
+		{
+			name:          "in 90 minutes",
+			input:         "appointment in 90 minutes",
+			expectedHour:  16,
+			expectedMin:   0,
+			expectedDay:   20,
+			expectedMonth: time.November,
+			shouldFind:    true,
+		},
+		{
+			name:          "in one hour",
+			input:         "meeting in one hour",
+			expectedHour:  15,
+			expectedMin:   30,
+			expectedDay:   20,
+			expectedMonth: time.November,
+			shouldFind:    true,
+		},
+		{
+			name:          "in an hour",
+			input:         "call in an hour",
+			expectedHour:  15,
+			expectedMin:   30,
+			expectedDay:   20,
+			expectedMonth: time.November,
+			shouldFind:    true,
+		},
+		{
+			name:          "in fifteen minutes",
+			input:         "break in fifteen minutes",
+			expectedHour:  14,
+			expectedMin:   45,
+			expectedDay:   20,
+			expectedMonth: time.November,
+			shouldFind:    true,
+		},
+		{
+			name:          "3 hours (crosses day boundary)",
+			input:         "review in 10 hours",
+			expectedHour:  0,
+			expectedMin:   30,
+			expectedDay:   21, // Next day
+			expectedMonth: time.November,
+			shouldFind:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.input, refTime)
+
+			if tt.shouldFind {
+				if result.DueDate == nil {
+					t.Errorf("Expected to find date, but got nil")
+					return
+				}
+
+				if result.DueDate.Day() != tt.expectedDay {
+					t.Errorf("Expected day %d, got %d", tt.expectedDay, result.DueDate.Day())
+				}
+				if result.DueDate.Month() != tt.expectedMonth {
+					t.Errorf("Expected month %v, got %v", tt.expectedMonth, result.DueDate.Month())
+				}
+				if result.DueDate.Hour() != tt.expectedHour {
+					t.Errorf("Expected hour %d, got %d", tt.expectedHour, result.DueDate.Hour())
+				}
+				if result.DueDate.Minute() != tt.expectedMin {
+					t.Errorf("Expected minute %d, got %d", tt.expectedMin, result.DueDate.Minute())
+				}
+
+				// Check that time text was removed from title
+				if result.CleanedTitle == tt.input {
+					t.Errorf("Title was not cleaned: %s", result.CleanedTitle)
+				}
+			} else {
+				if result.DueDate != nil {
+					t.Errorf("Expected no date, but found %v", result.DueDate)
+				}
+			}
+		})
+	}
+}
+
 func TestParseAdditionalNaturalLanguage(t *testing.T) {
 	refTime := time.Date(2024, 11, 20, 12, 0, 0, 0, time.UTC) // Wednesday, Nov 20, 2024
 

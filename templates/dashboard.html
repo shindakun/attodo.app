@@ -308,6 +308,81 @@
             font-weight: 600;
         }
 
+        /* Command Bar */
+        #command-bar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            backdrop-filter: blur(4px);
+        }
+
+        #command-bar-overlay.visible {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 20vh;
+            animation: fadeIn 0.15s ease-out;
+        }
+
+        #command-bar {
+            width: 90%;
+            max-width: 600px;
+            background: var(--pico-card-background-color);
+            border-radius: 12px;
+            box-shadow: 0 16px 64px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            animation: slideDown 0.2s ease-out;
+        }
+
+        #command-bar-input {
+            width: 100%;
+            padding: 1.25rem 1.5rem;
+            border: none;
+            font-size: 1.125rem;
+            background: transparent;
+            color: var(--pico-color);
+            outline: none;
+            border-bottom: 2px solid var(--pico-muted-border-color);
+        }
+
+        #command-bar-input::placeholder {
+            color: var(--pico-muted-color);
+            opacity: 0.6;
+        }
+
+        #command-bar-help {
+            padding: 1rem 1.5rem;
+            font-size: 0.875rem;
+            color: var(--pico-muted-color);
+            border-top: 1px solid var(--pico-muted-border-color);
+            background: var(--pico-card-sectioning-background-color);
+        }
+
+        #command-bar-help strong {
+            color: var(--pico-color);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
         .task-due-date svg {
             flex-shrink: 0;
         }
@@ -471,6 +546,31 @@
             taskItem.querySelector('.task-view').style.display = 'none';
             taskItem.querySelector('.task-edit').style.display = 'block';
             taskItem.querySelector('.task-actions').style.display = 'none';
+
+            // Populate date/time fields from UTC data
+            const dateInput = document.getElementById('dueDate-' + rkey);
+            const timeInput = document.getElementById('dueTime-' + rkey);
+
+            if (dateInput && timeInput) {
+                const utcDateStr = dateInput.getAttribute('data-utc-date');
+
+                if (utcDateStr) {
+                    const date = new Date(utcDateStr);
+                    // Format date as YYYY-MM-DD in local timezone
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    dateInput.value = `${year}-${month}-${day}`;
+
+                    // Format time as HH:MM in local timezone
+                    // Only set time if it's not midnight
+                    if (date.getHours() !== 0 || date.getMinutes() !== 0) {
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        timeInput.value = `${hours}:${minutes}`;
+                    }
+                }
+            }
         }
 
         function cancelEdit(rkey) {
@@ -1487,9 +1587,14 @@
 
                 const diffHours = (dueDate - now) / (1000 * 60 * 60);
 
+                // Check if due date is on the same calendar day (today)
+                const isDueToday = dueDate.getFullYear() === now.getFullYear() &&
+                    dueDate.getMonth() === now.getMonth() &&
+                    dueDate.getDate() === now.getDate();
+
                 if (diffHours < 0) {
                     overdueCount++;
-                } else if (diffHours < 24) {
+                } else if (isDueToday) {
                     dueTodayCount++;
                 } else if (diffHours < 72) {
                     dueSoonCount++;
@@ -1560,6 +1665,154 @@
         // Re-check every 5 minutes
         notificationCheckInterval = setInterval(checkForUpcomingTasks, 5 * 60 * 1000);
 
+    </script>
+
+    <!-- Command Bar -->
+    <div id="command-bar-overlay" onclick="if(event.target === this) closeCommandBar()">
+        <div id="command-bar">
+            <input
+                type="text"
+                id="command-bar-input"
+                placeholder="Type a task... (e.g., 'call client in 2 hours, discuss project timeline')"
+                autocomplete="off"
+            />
+            <div id="command-bar-help">
+                <strong>Quick Add:</strong> Type your task title and use natural language for dates. Add #tags anywhere.<br>
+                Examples: "meeting tomorrow at 3pm #work" • "call client in 2 hours, discuss project #urgent" • "review next friday #project"
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Command Bar functionality
+        (function() {
+            const commandBarOverlay = document.getElementById('command-bar-overlay');
+            const commandBarInput = document.getElementById('command-bar-input');
+
+            if (!commandBarOverlay || !commandBarInput) {
+                console.error('Command bar elements not found');
+                return;
+            }
+
+            console.log('Command bar initialized');
+
+            window.openCommandBar = function() {
+                console.log('Opening command bar');
+                commandBarOverlay.classList.add('visible');
+                commandBarInput.value = '';
+                commandBarInput.focus();
+            };
+
+            window.closeCommandBar = function() {
+                console.log('Closing command bar');
+                commandBarOverlay.classList.remove('visible');
+                commandBarInput.value = '';
+            };
+
+            // Keyboard shortcut: Cmd+Shift+P (Mac) or Ctrl+Shift+P (Windows/Linux)
+            document.addEventListener('keydown', (e) => {
+                // Check for Cmd+Shift+P (Mac) or Ctrl+Shift+P (Windows/Linux)
+                // Use toUpperCase() to handle both 'P' and 'p'
+                if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toUpperCase() === 'P') {
+                    console.log('Command bar shortcut detected');
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.openCommandBar();
+                    return;
+                }
+
+                // Close on Escape
+                if (e.key === 'Escape' && commandBarOverlay.classList.contains('visible')) {
+                    e.preventDefault();
+                    window.closeCommandBar();
+                }
+            });
+
+            console.log('Command bar keyboard listener registered');
+
+        // Handle command bar input submission
+        commandBarInput.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && commandBarInput.value.trim()) {
+                e.preventDefault();
+                const input = commandBarInput.value.trim();
+
+                // Parse description after comma
+                let title = input;
+                let description = '';
+                const commaIndex = input.indexOf(',');
+                if (commaIndex !== -1) {
+                    title = input.substring(0, commaIndex).trim();
+                    description = input.substring(commaIndex + 1).trim();
+                }
+
+                // Extract hashtags from both title and description
+                const hashtagRegex = /#(\w+)/g;
+                const tags = new Set();
+                let combinedText = title + ' ' + description;
+                let match;
+
+                while ((match = hashtagRegex.exec(combinedText)) !== null) {
+                    tags.add(match[1].toLowerCase());
+                }
+
+                // Remove hashtags from title and description
+                title = title.replace(/#\w+/g, '').replace(/\s+/g, ' ').trim();
+                description = description.replace(/#\w+/g, '').replace(/\s+/g, ' ').trim();
+
+                try {
+                    // Create the task using HTMX-like fetch
+                    const formData = new URLSearchParams();
+                    formData.append('title', title);
+                    if (description) {
+                        formData.append('description', description);
+                    }
+                    // Add tags if any were found
+                    if (tags.size > 0) {
+                        formData.append('tags', Array.from(tags).join(','));
+                    }
+
+                    const response = await fetch('/app/tasks', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: formData.toString()
+                    });
+
+                    if (response.ok) {
+                        // Get the new task HTML
+                        const html = await response.text();
+
+                        // Find the incomplete tasks container
+                        const container = document.getElementById('incomplete-tasks');
+                        if (container) {
+                            // Insert at the beginning
+                            container.insertAdjacentHTML('afterbegin', html);
+                        }
+
+                        // Show success message
+                        showToast('Task created!', 'success');
+
+                        // Close command bar
+                        window.closeCommandBar();
+
+                        // Trigger notification check
+                        setTimeout(checkForUpcomingTasks, 100);
+                    } else {
+                        showToast('Failed to create task', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error creating task:', error);
+                    showToast('Error creating task', 'error');
+                }
+            }
+        });
+
+        // Prevent clicks inside command bar from closing it
+        document.getElementById('command-bar').addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+        })(); // End of IIFE
     </script>
 </body>
 </html>
