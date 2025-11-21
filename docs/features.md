@@ -270,7 +270,7 @@ AT Todo includes a comprehensive notification system to help you stay on top of 
 Get notified even when AT Todo isn't open.
 
 **Enabling Push Notifications:**
-1. Open Settings (gear icon)
+1. Open Settings
 2. Click "Enable Push Notifications"
 3. Grant permission when prompted
 4. Configure your preferences
@@ -479,7 +479,6 @@ AT Todo is a Progressive Web App (PWA) that can be installed on your device.
 - **Decentralized storage**: Tasks stored in YOUR AT Protocol repository
 - **No central database**: AT Todo servers don't store your tasks
 - **Portable**: Your data works with any AT Protocol app
-- **Private**: Only you can access your tasks (unless you share lists)
 
 ### Notification Privacy
 
@@ -504,7 +503,10 @@ AT Todo is a Progressive Web App (PWA) that can be installed on your device.
 **Never stored:**
 - Your password
 - Browsing history
-- Personal information beyond tasks
+
+**Stored server-side**
+- Subscription status
+- Email address (for contacting you only)
 
 ---
 

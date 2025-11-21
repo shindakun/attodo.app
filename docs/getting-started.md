@@ -136,6 +136,7 @@ AT Todo organizes your tasks into tabs:
 
 - **Incomplete** - Tasks that are still pending
 - **Completed** - Tasks you've finished
+- **Due** - Taskks with due dates
 - **Lists** - Organized collections of tasks
 
 Click the tab buttons to switch between views. This helps you focus on what needs to be done while keeping a record of completed work.
