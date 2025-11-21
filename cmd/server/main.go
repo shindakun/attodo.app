@@ -23,6 +23,7 @@ func main() {
 	authMiddleware := middleware.NewAuthMiddleware(authHandler)
 	taskHandler := handlers.NewTaskHandler(authHandler.Client())
 	listHandler := handlers.NewListHandler(authHandler.Client())
+	settingsHandler := handlers.NewSettingsHandler(authHandler.Client())
 
 	// Wire up cross-references between handlers
 	taskHandler.SetListHandler(listHandler)
@@ -32,6 +33,13 @@ func main() {
 
 	// Setup routes
 	mux := http.NewServeMux()
+
+	// Service worker with custom scope header
+	mux.HandleFunc("/static/sw.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Service-Worker-Allowed", "/")
+		w.Header().Set("Content-Type", "application/javascript")
+		http.ServeFile(w, r, "static/sw.js")
+	})
 
 	// Static files
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -59,6 +67,7 @@ func main() {
 	mux.Handle("/app/tasks", authMiddleware.RequireAuth(http.HandlerFunc(taskHandler.HandleTasks)))
 	mux.Handle("/app/lists", authMiddleware.RequireAuth(http.HandlerFunc(listHandler.HandleLists)))
 	mux.Handle("/app/lists/view/", authMiddleware.RequireAuth(http.HandlerFunc(listHandler.HandleListDetail)))
+	mux.Handle("/app/settings", authMiddleware.RequireAuth(http.HandlerFunc(settingsHandler.HandleSettings)))
 
 	// Wrap with cache control middleware
 	handler := middleware.NoCacheMiddleware(cfg, mux)

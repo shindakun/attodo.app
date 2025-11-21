@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/bluesky-social/indigo/atproto/identity"
 	"github.com/bluesky-social/indigo/atproto/syntax"
 	"github.com/shindakun/bskyoauth"
+	"github.com/shindakun/attodo/internal/dateparse"
 	"github.com/shindakun/attodo/internal/models"
 	"github.com/shindakun/attodo/internal/session"
 )
@@ -162,6 +164,12 @@ func parseTaskFields(record map[string]interface{}) models.Task {
 			task.CompletedAt = &t
 		}
 	}
+	// Parse due date if present
+	if dueDate, ok := record["dueDate"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, dueDate); err == nil {
+			task.DueDate = &t
+		}
+	}
 	// Parse tags if present
 	if tags, ok := record["tags"].([]interface{}); ok {
 		task.Tags = make([]string, 0, len(tags))
@@ -188,6 +196,11 @@ func buildTaskRecord(task *models.Task) map[string]interface{} {
 	// Add completedAt if task is completed
 	if task.CompletedAt != nil {
 		record["completedAt"] = task.CompletedAt.Format(time.RFC3339)
+	}
+
+	// Add due date if present
+	if task.DueDate != nil {
+		record["dueDate"] = task.DueDate.Format(time.RFC3339)
 	}
 
 	// Always include tags field (even if empty) to allow clearing tags
@@ -235,6 +248,8 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	title := r.FormValue("title")
 	description := r.FormValue("description")
 	tagsInput := r.FormValue("tags")
+	dueDateInput := r.FormValue("dueDate")
+	dueTimeInput := r.FormValue("dueTime")
 
 	if title == "" {
 		http.Error(w, "Title is required", http.StatusBadRequest)
@@ -244,14 +259,54 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	// Parse and clean tags
 	tags := parseTags(tagsInput)
 
+	// Parse date from title if no explicit due date provided
+	// Use local time for parsing so "2 weeks from now" is based on user's local date
+	now := time.Now()
+	var dueDate *time.Time
+
+	if dueDateInput != "" {
+		// Explicit due date provided via form field
+		if t, err := time.Parse("2006-01-02", dueDateInput); err == nil {
+			hour, min := 0, 0
+			// Parse time if provided
+			if dueTimeInput != "" {
+				if timeVal, err := time.Parse("15:04", dueTimeInput); err == nil {
+					hour = timeVal.Hour()
+					min = timeVal.Minute()
+				}
+			}
+			// Create in local timezone, then convert to UTC
+			localDate := time.Date(t.Year(), t.Month(), t.Day(), hour, min, 0, 0, now.Location())
+			dueDateUTC := localDate.UTC()
+			dueDate = &dueDateUTC
+		}
+	} else {
+		// Try to parse date and time from title using local time as reference
+		parseResult := dateparse.Parse(title, now)
+		if parseResult.DueDate != nil {
+			// Convert to UTC properly - the parsed date is already in local timezone
+			dueDateUTC := parseResult.DueDate.UTC()
+			dueDate = &dueDateUTC
+			// Use cleaned title (with date/time removed)
+			if parseResult.CleanedTitle != "" {
+				title = parseResult.CleanedTitle
+			}
+		}
+	}
+
 	// Create task record
-	now := time.Now().UTC()
+	nowUTC := time.Now().UTC()
 	record := map[string]interface{}{
 		"$type":       TaskCollection,
 		"title":       title,
 		"description": description,
 		"completed":   false,
-		"createdAt":   now.Format(time.RFC3339),
+		"createdAt":   nowUTC.Format(time.RFC3339),
+	}
+
+	// Add due date if parsed or provided
+	if dueDate != nil {
+		record["dueDate"] = dueDate.Format(time.RFC3339)
 	}
 
 	// Add tags if present
@@ -282,7 +337,8 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		Title:       title,
 		Description: description,
 		Completed:   false,
-		CreatedAt:   now,
+		CreatedAt:   nowUTC,
+		DueDate:     dueDate,
 		Tags:        tags,
 		RKey:        rkey,
 		URI:         output.Uri,
@@ -290,7 +346,7 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 
 	// Return HTMX response with new task partial
 	w.Header().Set("Content-Type", "text/html")
-	Render(w, "task-item.html", task)
+	Render(w, "task-item.html", &task)
 }
 
 // handleUpdateTask updates a task (toggle completion)
@@ -418,6 +474,44 @@ func (h *TaskHandler) handleEditTask(w http.ResponseWriter, r *http.Request) {
 	tagsInput := r.FormValue("tags")
 	task.Tags = parseTags(tagsInput)
 
+	// Update due date and time
+	dueDateInput := r.FormValue("dueDate")
+	dueTimeInput := r.FormValue("dueTime")
+
+	if dueDateInput != "" {
+		// Explicit due date provided
+		if t, err := time.Parse("2006-01-02", dueDateInput); err == nil {
+			hour, min := 0, 0
+			// Parse time if provided
+			if dueTimeInput != "" {
+				if timeVal, err := time.Parse("15:04", dueTimeInput); err == nil {
+					hour = timeVal.Hour()
+					min = timeVal.Minute()
+				}
+			}
+			// Create in local timezone, then convert to UTC
+			now := time.Now()
+			localDate := time.Date(t.Year(), t.Month(), t.Day(), hour, min, 0, 0, now.Location())
+			dueDateUTC := localDate.UTC()
+			task.DueDate = &dueDateUTC
+		}
+	} else {
+		// No explicit date - try parsing from title using local time as reference
+		parseResult := dateparse.Parse(task.Title, time.Now())
+		if parseResult.DueDate != nil {
+			// Convert to UTC properly - the parsed date is already in local timezone
+			dueDateUTC := parseResult.DueDate.UTC()
+			task.DueDate = &dueDateUTC
+			// Use cleaned title
+			if parseResult.CleanedTitle != "" {
+				task.Title = parseResult.CleanedTitle
+			}
+		} else {
+			// No date in title either - clear due date
+			task.DueDate = nil
+		}
+	}
+
 	// Build the record for update
 	record := buildTaskRecord(task)
 
@@ -442,7 +536,7 @@ func (h *TaskHandler) handleEditTask(w http.ResponseWriter, r *http.Request) {
 
 	// Return updated task partial for HTMX to swap
 	w.Header().Set("Content-Type", "text/html")
-	Render(w, "task-item.html", task)
+	Render(w, "task-item.html", task) // task is already a pointer from getRecord
 }
 
 // handleDeleteTask deletes a task
@@ -493,8 +587,10 @@ func (h *TaskHandler) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	// Get filter parameters
 	filter := r.URL.Query().Get("filter")
 	tagFilter := r.URL.Query().Get("tag")
+	sortBy := r.URL.Query().Get("sort")
+	dueFilter := r.URL.Query().Get("due")
 
-	log.Printf("Listing tasks for DID: %s (filter: %s, tag: %s)", sess.DID, filter, tagFilter)
+	log.Printf("Listing tasks for DID: %s (filter: %s, tag: %s, sort: %s, due: %s)", sess.DID, filter, tagFilter, sortBy, dueFilter)
 
 	// Use com.atproto.repo.listRecords to fetch all tasks
 	var tasks []models.Task
@@ -562,17 +658,98 @@ func (h *TaskHandler) handleListTasks(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Apply due date filter
+		if dueFilter != "" {
+			switch dueFilter {
+			case "overdue":
+				if !task.IsOverdue() {
+					continue
+				}
+			case "today":
+				if !task.IsDueToday() {
+					continue
+				}
+			case "upcoming":
+				if !task.IsDueSoon() {
+					continue
+				}
+			case "none":
+				if task.DueDate != nil {
+					continue
+				}
+			case "has":
+				// Show only tasks that have a due date
+				if task.DueDate == nil {
+					continue
+				}
+			}
+		}
+
 		filteredTasks = append(filteredTasks, task)
 	}
 
+	// Sort tasks
+	sortTasks(filteredTasks, sortBy)
+
 	log.Printf("Found %d tasks (filtered: %d)", len(tasks), len(filteredTasks))
+
+	// Check if client wants JSON response
+	acceptHeader := r.Header.Get("Accept")
+	formatParam := r.URL.Query().Get("format")
+
+	if formatParam == "json" || strings.Contains(acceptHeader, "application/json") {
+		// Return JSON response
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(filteredTasks); err != nil {
+			log.Printf("Failed to encode JSON: %v", err)
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
+		return
+	}
 
 	// Return HTML partials for HTMX
 	w.Header().Set("Content-Type", "text/html")
-	for _, task := range filteredTasks {
-		if err := Render(w, "task-item.html", task); err != nil {
+	for i := range filteredTasks {
+		if err := Render(w, "task-item.html", &filteredTasks[i]); err != nil {
 			log.Printf("Failed to render task: %v", err)
 		}
+	}
+}
+
+// sortTasks sorts tasks by different criteria
+func sortTasks(tasks []models.Task, sortBy string) {
+	switch sortBy {
+	case "due":
+		// Sort by due date: tasks with due dates first (soonest first), then tasks without due dates
+		sort.Slice(tasks, func(i, j int) bool {
+			// Tasks without due dates go last
+			if tasks[i].DueDate == nil && tasks[j].DueDate == nil {
+				return false // Keep original order
+			}
+			if tasks[i].DueDate == nil {
+				return false // i goes after j
+			}
+			if tasks[j].DueDate == nil {
+				return true // i goes before j
+			}
+			// Both have due dates - sort by date (earliest first)
+			return tasks[i].DueDate.Before(*tasks[j].DueDate)
+		})
+	case "title":
+		// Sort alphabetically by title (case-insensitive)
+		sort.Slice(tasks, func(i, j int) bool {
+			return strings.ToLower(tasks[i].Title) < strings.ToLower(tasks[j].Title)
+		})
+	case "created":
+		// Sort by creation date (newest first)
+		sort.Slice(tasks, func(i, j int) bool {
+			return tasks[i].CreatedAt.After(tasks[j].CreatedAt)
+		})
+	default:
+		// Default: most recent first (by creation date)
+		sort.Slice(tasks, func(i, j int) bool {
+			return tasks[i].CreatedAt.After(tasks[j].CreatedAt)
+		})
 	}
 }
 

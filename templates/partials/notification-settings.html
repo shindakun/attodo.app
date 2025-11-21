@@ -1,0 +1,381 @@
+{{define "notification-settings.html"}}
+<article id="notification-settings">
+    <h3>Notification Settings</h3>
+
+    <div id="notification-status">
+        <p>
+            <strong>Browser Notifications:</strong>
+            <span id="notification-permission-status">Checking...</span>
+        </p>
+    </div>
+
+    <div id="notification-controls">
+        <button id="enable-notifications" style="display: none;">
+            Enable Push Notifications
+        </button>
+
+        <div id="notification-preferences" style="display: none;">
+            <h4>Notification Timing</h4>
+
+            <label>
+                <input type="checkbox" id="notify-overdue" checked>
+                Notify me about overdue tasks
+            </label>
+
+            <label>
+                <input type="checkbox" id="notify-today" checked>
+                Notify me about tasks due today
+            </label>
+
+            <label>
+                <input type="checkbox" id="notify-soon">
+                Notify me about tasks due within 3 days
+            </label>
+
+            <label>
+                Advance notice (hours before due):
+                <input type="number" id="notify-hours-before" min="0" max="72" value="1" style="width: 80px;">
+            </label>
+
+            <h4>Check Frequency</h4>
+            <label>
+                <select id="check-frequency">
+                    <option value="15">Every 15 minutes</option>
+                    <option value="30" selected>Every 30 minutes</option>
+                    <option value="60">Every hour</option>
+                    <option value="120">Every 2 hours</option>
+                </select>
+            </label>
+
+            <h4>Quiet Hours</h4>
+            <label>
+                <input type="checkbox" id="quiet-hours-enabled">
+                Enable Do Not Disturb mode
+            </label>
+
+            <div id="quiet-hours-controls" style="display: none; margin-left: 1.5rem;">
+                <label>
+                    Start time (hour):
+                    <input type="number" id="quiet-start" min="0" max="23" value="22" style="width: 80px;">
+                    <small>Default: 10 PM (22)</small>
+                </label>
+
+                <label>
+                    End time (hour):
+                    <input type="number" id="quiet-end" min="0" max="23" value="8" style="width: 80px;">
+                    <small>Default: 8 AM (8)</small>
+                </label>
+            </div>
+
+            <button onclick="saveNotificationSettings()">Save Preferences</button>
+            <button onclick="testNotification()" class="secondary">Send Test Notification</button>
+        </div>
+    </div>
+</article>
+
+<script>
+// Show/hide quiet hours controls based on checkbox
+document.getElementById('quiet-hours-enabled')?.addEventListener('change', (e) => {
+    document.getElementById('quiet-hours-controls').style.display =
+        e.target.checked ? 'block' : 'none';
+});
+
+// Notification settings management
+let currentSettings = null; // Cache current settings
+
+// Fetch current settings
+async function loadSettings() {
+    try {
+        const response = await fetch('/app/settings');
+        if (!response.ok) throw new Error('Failed to load settings');
+        return await response.json();
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        // Return defaults if fetch fails
+        return {
+            notifyOverdue: true,
+            notifyToday: true,
+            notifySoon: false,
+            hoursBefore: 1,
+            checkFrequency: 30,
+            quietHoursEnabled: false,
+            quietStart: 22,
+            quietEnd: 8,
+            pushEnabled: false
+        };
+    }
+}
+
+// Save settings
+async function saveSettings(settings) {
+    try {
+        const response = await fetch('/app/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings)
+        });
+
+        if (!response.ok) throw new Error('Failed to save settings');
+        return await response.json();
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        throw error;
+    }
+}
+
+async function initNotificationSettings() {
+    // Check notification permission status
+    if (!('Notification' in window)) {
+        document.getElementById('notification-permission-status').textContent =
+            'Not supported in this browser';
+        return;
+    }
+
+    const permission = Notification.permission;
+    const statusEl = document.getElementById('notification-permission-status');
+    const enableBtn = document.getElementById('enable-notifications');
+    const prefsEl = document.getElementById('notification-preferences');
+
+    // Load settings from AT Protocol
+    await loadNotificationSettings();
+
+    if (permission === 'granted') {
+        statusEl.textContent = 'Enabled ✓';
+        statusEl.style.color = 'var(--pico-primary)';
+        prefsEl.style.display = 'block';
+    } else if (permission === 'denied') {
+        statusEl.textContent = 'Blocked (check browser settings)';
+        statusEl.style.color = 'var(--pico-del-color)';
+    } else {
+        statusEl.textContent = 'Not enabled';
+        enableBtn.style.display = 'block';
+    }
+}
+
+async function requestNotificationPermission() {
+    try {
+        const permission = await Notification.requestPermission();
+
+        if (permission === 'granted') {
+            showToast('Notifications enabled!', 'success');
+
+            // Update UI to show preferences
+            const statusEl = document.getElementById('notification-permission-status');
+            const enableBtn = document.getElementById('enable-notifications');
+            const prefsEl = document.getElementById('notification-preferences');
+
+            statusEl.textContent = 'Enabled ✓';
+            statusEl.style.color = 'var(--pico-primary)';
+            enableBtn.style.display = 'none';
+            prefsEl.style.display = 'block';
+
+            // Load current settings or use defaults (this populates the form)
+            await loadNotificationSettings();
+
+            // Create initial settings in AT Protocol with pushEnabled = true
+            const initialSettings = {
+                notifyOverdue: document.getElementById('notify-overdue').checked,
+                notifyToday: document.getElementById('notify-today').checked,
+                notifySoon: document.getElementById('notify-soon').checked,
+                hoursBefore: parseInt(document.getElementById('notify-hours-before').value),
+                checkFrequency: parseInt(document.getElementById('check-frequency').value),
+                quietHoursEnabled: document.getElementById('quiet-hours-enabled').checked,
+                quietStart: parseInt(document.getElementById('quiet-start').value),
+                quietEnd: parseInt(document.getElementById('quiet-end').value),
+                pushEnabled: true
+            };
+
+            try {
+                const savedSettings = await saveSettings(initialSettings);
+                currentSettings = savedSettings;
+            } catch (error) {
+                console.error('Failed to save initial settings:', error);
+            }
+
+            // Register periodic sync for background notifications
+            await registerPeriodicSync();
+        } else {
+            showToast('Notification permission denied', 'error');
+        }
+    } catch (error) {
+        console.error('Error requesting notification permission:', error);
+        showToast('Failed to enable notifications', 'error');
+    }
+}
+
+async function loadNotificationSettings() {
+    try {
+        // Load from AT Protocol
+        const settings = await loadSettings();
+        currentSettings = settings;
+
+        // Populate UI
+        if (settings.notifyOverdue !== undefined) {
+            document.getElementById('notify-overdue').checked = settings.notifyOverdue;
+        }
+        if (settings.notifyToday !== undefined) {
+            document.getElementById('notify-today').checked = settings.notifyToday;
+        }
+        if (settings.notifySoon !== undefined) {
+            document.getElementById('notify-soon').checked = settings.notifySoon;
+        }
+        if (settings.hoursBefore !== undefined) {
+            document.getElementById('notify-hours-before').value = settings.hoursBefore;
+        }
+        if (settings.checkFrequency !== undefined) {
+            document.getElementById('check-frequency').value = settings.checkFrequency;
+        }
+        if (settings.quietHoursEnabled !== undefined) {
+            const quietCheckbox = document.getElementById('quiet-hours-enabled');
+            quietCheckbox.checked = settings.quietHoursEnabled;
+            // Show/hide quiet hours controls based on saved setting
+            document.getElementById('quiet-hours-controls').style.display =
+                settings.quietHoursEnabled ? 'block' : 'none';
+        }
+        if (settings.quietStart !== undefined) {
+            document.getElementById('quiet-start').value = settings.quietStart;
+        }
+        if (settings.quietEnd !== undefined) {
+            document.getElementById('quiet-end').value = settings.quietEnd;
+        }
+
+        return settings;
+    } catch (error) {
+        console.error('Failed to load notification settings:', error);
+        return null;
+    }
+}
+
+async function saveNotificationSettings() {
+    const settings = {
+        notifyOverdue: document.getElementById('notify-overdue').checked,
+        notifyToday: document.getElementById('notify-today').checked,
+        notifySoon: document.getElementById('notify-soon').checked,
+        hoursBefore: parseInt(document.getElementById('notify-hours-before').value),
+        checkFrequency: parseInt(document.getElementById('check-frequency').value),
+        quietHoursEnabled: document.getElementById('quiet-hours-enabled').checked,
+        quietStart: parseInt(document.getElementById('quiet-start').value),
+        quietEnd: parseInt(document.getElementById('quiet-end').value),
+        pushEnabled: Notification.permission === 'granted'
+    };
+
+    try {
+        const updatedSettings = await saveSettings(settings);
+        currentSettings = updatedSettings;
+        showToast('Settings saved!', 'success');
+
+        // Re-register periodic sync with new frequency
+        if (Notification.permission === 'granted') {
+            await registerPeriodicSync();
+        }
+
+        // Close the settings modal
+        if (typeof closeSettings === 'function') {
+            closeSettings();
+        }
+    } catch (error) {
+        console.error('Failed to save notification settings:', error);
+        showToast('Failed to save settings', 'error');
+    }
+}
+
+async function testNotification() {
+    if (Notification.permission !== 'granted') {
+        showToast('Please enable notifications first', 'error');
+        return;
+    }
+
+    try {
+        if (!('serviceWorker' in navigator)) {
+            showToast('Service workers not supported', 'error');
+            return;
+        }
+
+        const registration = await navigator.serviceWorker.ready;
+        if (!registration) {
+            showToast('Service worker not registered', 'error');
+            return;
+        }
+
+        await registration.showNotification('AT Todo Test', {
+            body: 'Notifications are working!',
+            icon: '/static/icon-192.png',
+            badge: '/static/icon-192.png',
+            tag: 'test',
+            requireInteraction: false
+        });
+
+        // Close the settings modal so user can see the notification
+        if (typeof closeSettings === 'function') {
+            closeSettings();
+        }
+
+        showToast('Test notification sent!', 'success');
+    } catch (error) {
+        console.error('Test notification error:', error);
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+// Register periodic background sync for notifications
+async function registerPeriodicSync() {
+    if (!('serviceWorker' in navigator)) {
+        return;
+    }
+
+    // Check for periodic sync support
+    if (!('periodicSync' in navigator.serviceWorker)) {
+        // Fallback: use regular background sync
+        if ('sync' in navigator.serviceWorker) {
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                await registration.sync.register('check-tasks');
+            } catch (error) {
+                // Background sync registration failed
+            }
+        }
+        return;
+    }
+
+    try {
+        const registration = await navigator.serviceWorker.ready;
+
+        // Use current settings from AT Protocol
+        const settings = currentSettings || await loadSettings();
+        const frequency = settings.checkFrequency || 30; // minutes
+
+        // Register periodic sync (Chrome/Edge only)
+        await registration.periodicSync.register('check-due-tasks', {
+            minInterval: frequency * 60 * 1000 // Convert minutes to milliseconds
+        });
+    } catch (error) {
+        // Periodic sync registration failed
+    }
+}
+
+// Helper function for toast messages (reuse existing if available)
+function showToast(message, type) {
+    // Simple implementation - can be replaced with existing toast system
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 1rem;
+        background: ${type === 'success' ? 'var(--pico-primary)' : 'var(--pico-del-color)'};
+        color: white;
+        border-radius: var(--pico-border-radius);
+        z-index: 9999;
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', initNotificationSettings);
+
+// Add event listener for enable button
+document.getElementById('enable-notifications')?.addEventListener('click', requestNotificationPermission);
+</script>
+{{end}}

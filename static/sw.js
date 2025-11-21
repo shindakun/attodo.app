@@ -122,3 +122,168 @@ self.addEventListener('message', (event) => {
     checkHealth();
   }
 });
+
+// ============================================================================
+// NOTIFICATION SYSTEM
+// ============================================================================
+
+// Notification permission state
+let notificationsEnabled = false;
+
+// Check for due tasks periodically
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'check-due-tasks') {
+    event.waitUntil(checkDueTasksAndNotify());
+  }
+});
+
+// Handle background sync
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'check-tasks') {
+    event.waitUntil(checkDueTasksAndNotify());
+  }
+});
+
+// Handle notification clicks
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  // Open the app
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((clientList) => {
+      // If app is already open, focus it
+      for (const client of clientList) {
+        if (client.url.includes('/app') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Otherwise open a new window
+      if (clients.openWindow) {
+        return clients.openWindow('/app');
+      }
+    })
+  );
+});
+
+// Check tasks and send notifications
+async function checkDueTasksAndNotify() {
+  try {
+    // Get notification settings from AT Protocol
+    let settings = null;
+    try {
+      const settingsResponse = await fetch('/app/settings');
+      if (settingsResponse.ok) {
+        settings = await settingsResponse.json();
+      }
+    } catch (err) {
+      // Could not load settings, using defaults
+    }
+
+    // Use default settings if none available
+    if (!settings) {
+      settings = {
+        notifyOverdue: true,
+        notifyToday: true,
+        notifySoon: false,
+        hoursBefore: 2,
+        quietHoursEnabled: false
+      };
+    }
+
+    // Check quiet hours
+    if (settings.quietHoursEnabled) {
+      const now = new Date();
+      const hour = now.getHours();
+      const quietStart = settings.quietStart || 22;
+      const quietEnd = settings.quietEnd || 8;
+
+      const isQuiet = quietStart < quietEnd
+        ? (hour >= quietStart || hour < quietEnd)
+        : (hour >= quietStart && hour < quietEnd);
+
+      if (isQuiet) {
+        return;
+      }
+    }
+
+    // Fetch tasks as JSON
+    const tasksResponse = await fetch('/app/tasks?filter=incomplete&format=json');
+
+    if (!tasksResponse.ok) {
+      return;
+    }
+
+    const data = await tasksResponse.json();
+    const tasks = data.tasks || data; // Handle both {tasks: []} and [] formats
+
+    const now = new Date();
+    let overdueCount = 0;
+    let dueTodayCount = 0;
+    let nextDueTasks = [];
+
+    tasks.forEach(task => {
+      if (!task.dueDate) return; // Skip tasks without due dates
+
+      const dueDate = new Date(task.dueDate);
+      const diffHours = (dueDate - now) / (1000 * 60 * 60);
+
+      if (diffHours < 0) {
+        overdueCount++;
+      } else if (diffHours < 24) {
+        dueTodayCount++;
+        nextDueTasks.push({
+          title: task.title,
+          dueDate,
+          diffHours
+        });
+      }
+    });
+
+    // Send notifications based on what we found and user preferences
+    if (overdueCount > 0 && settings.notifyOverdue) {
+      await sendNotification(
+        'Overdue Tasks!',
+        `You have ${overdueCount} overdue task${overdueCount > 1 ? 's' : ''}.`,
+        { tag: 'overdue-tasks', badge: '/static/icon-192.png' }
+      );
+    } else if (dueTodayCount > 0 && settings.notifyToday) {
+      // Sort by soonest first
+      nextDueTasks.sort((a, b) => a.diffHours - b.diffHours);
+      const soonest = nextDueTasks[0];
+
+      const hoursUntil = Math.floor(soonest.diffHours);
+      const minutesUntil = Math.floor((soonest.diffHours - hoursUntil) * 60);
+
+      let timeText = '';
+      if (hoursUntil > 0) {
+        timeText = `in ${hoursUntil} hour${hoursUntil > 1 ? 's' : ''}`;
+      } else {
+        timeText = `in ${minutesUntil} minute${minutesUntil > 1 ? 's' : ''}`;
+      }
+
+      await sendNotification(
+        'Task Due Soon',
+        `"${soonest.title}" is due ${timeText}.`,
+        { tag: 'due-soon', badge: '/static/icon-192.png' }
+      );
+    }
+  } catch (error) {
+    // Error checking tasks for notifications
+  }
+}
+
+// Helper to send notifications
+async function sendNotification(title, body, options = {}) {
+  const defaultOptions = {
+    icon: '/static/icon-192.png',
+    badge: '/static/icon-192.png',
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
+    ...options
+  };
+
+  return self.registration.showNotification(title, {
+    body,
+    ...defaultOptions
+  });
+}

@@ -283,6 +283,35 @@
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
+
+        /* Due date styles */
+        .task-due-date {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: var(--pico-muted-color);
+            font-weight: 500;
+        }
+
+        .task-due-date.overdue {
+            color: #dc2626;
+            font-weight: 600;
+        }
+
+        .task-due-date.due-today {
+            color: #2563eb;
+            font-weight: 600;
+        }
+
+        .task-due-date.due-soon {
+            color: #ea580c;
+            font-weight: 600;
+        }
+
+        .task-due-date svg {
+            flex-shrink: 0;
+        }
+
         /* Tag filter active state */
         .tag-filter-active {
             padding: 0.5rem;
@@ -298,6 +327,61 @@
         .tag-filter-active button {
             padding: 0.25rem 0.5rem;
             margin: 0;
+        }
+        /* Notification banner styles */
+        .notification-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: var(--pico-primary-background);
+            border-bottom: 2px solid var(--pico-primary);
+            padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            animation: slideDown 0.3s ease-out;
+        }
+        .notification-banner.warning {
+            background: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+        }
+        .notification-banner.error {
+            background: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
+        }
+        .notification-content {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .notification-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+        .notification-message {
+            flex: 1;
+        }
+        .notification-close {
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0 0.5rem;
+            color: inherit;
+        }
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
     </style>
     <script>
@@ -361,8 +445,14 @@
 
             const tasksContainer = document.getElementById(tabName + '-tasks');
 
+            // Skip reload logic for lists tab (it doesn't have a tasks container)
+            if (tabName === 'lists') {
+                return;
+            }
+
             // If filtering by tag, update the container's URL and trigger reload
-            if (isFilteringByTag && currentFilterTag) {
+            // Note: due tab doesn't support tag filtering
+            if (isFilteringByTag && currentFilterTag && tabName !== 'due') {
                 const filter = tabName === 'completed' ? 'completed' : 'incomplete';
                 const url = `/app/tasks?filter=${filter}&tag=${encodeURIComponent(currentFilterTag)}`;
 
@@ -472,27 +562,14 @@
                 <input type="hidden" name="action" value="add">
             `;
 
-            // Configure HTMX to use the existing indicator class
-            const filter = taskElement?.classList.contains('completed') ? 'completed' : 'incomplete';
+            // Configure HTMX to swap the updated task directly
             form.setAttribute('hx-patch', '/app/lists');
-            form.setAttribute('hx-swap', 'none'); // Don't swap anything from PATCH response
+            form.setAttribute('hx-target', '#task-' + taskRKey);
+            form.setAttribute('hx-swap', 'outerHTML swap:500ms'); // Same animation as normal edits
             form.setAttribute('hx-indicator', '#task-' + taskRKey);
 
             // Process HTMX attributes
             htmx.process(form);
-
-            // Listen for successful request to reload the task
-            form.addEventListener('htmx:afterRequest', function(evt) {
-                if (evt.detail.successful && taskElement) {
-                    // Use HTMX to reload just this task element
-                    const url = `/app/tasks?filter=${filter}`;
-                    taskElement.setAttribute('hx-get', url);
-                    taskElement.setAttribute('hx-select', '#task-' + taskRKey);
-                    taskElement.setAttribute('hx-swap', 'outerHTML');
-                    htmx.process(taskElement);
-                    htmx.trigger(taskElement, 'load');
-                }
-            }, { once: true });
 
             // Submit via HTMX
             htmx.trigger(form, 'submit');
@@ -607,10 +684,13 @@
     <!-- Toast notification container -->
     <div id="toast-container" class="toast-container" aria-live="polite" role="status"></div>
 
+    <!-- Notification banner -->
+    {{template "notification-banner.html"}}
+
     <script>
-        // Register service worker
+        // Register service worker with root scope
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/sw.js')
+            navigator.serviceWorker.register('/static/sw.js', { scope: '/' })
                 .then(registration => {
                     console.log('Service Worker registered:', registration);
                 })
@@ -676,6 +756,7 @@
             </ul>
             <ul>
                 <li><a href="/docs">Docs</a></li>
+                <li><a href="#" onclick="showSettings(); return false;">Settings</a></li>
                 <li><a href="/logout">Logout</a></li>
             </ul>
         </nav>
@@ -700,6 +781,7 @@
                     <label for="title">
                         Title
                         <input type="text" name="title" id="title" required>
+                        <small>💡 Tip: Include dates like "11/26 meeting" or "tomorrow review" to auto-set due dates!</small>
                     </label>
 
                     <label for="description">
@@ -712,6 +794,18 @@
                         <input type="text" name="tags" id="tags" placeholder="work, urgent, personal">
                         <small>Separate tags with commas (max 10 tags, 30 characters each). Emoji supported! 🎯</small>
                     </label>
+
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem;">
+                        <label for="dueDate">
+                            Due Date (optional)
+                            <input type="date" name="dueDate" id="dueDate">
+                        </label>
+                        <label for="dueTime">
+                            Time (optional)
+                            <input type="time" name="dueTime" id="dueTime">
+                        </label>
+                    </div>
+                    <small style="display: block; margin-top: -0.5rem; margin-bottom: 0.5rem;">Or type date/time in title (e.g., "tomorrow at 3pm" or "11/26 3:30pm meeting")</small>
 
                     <button type="submit">Add Task</button>
                 </form>
@@ -731,6 +825,7 @@
             <div class="tabs">
                 <button class="active" onclick="switchTab('incomplete')">Incomplete</button>
                 <button onclick="switchTab('completed')">Completed</button>
+                <button onclick="switchTab('due')">Due</button>
                 <button onclick="switchTab('lists')">Lists</button>
             </div>
 
@@ -745,6 +840,13 @@
             <div id="completed-tab" class="tab-content">
                 <div id="completed-tasks" hx-get="/app/tasks?filter=completed" hx-trigger="load, reload from:body" hx-swap="innerHTML" hx-indicator="#tasks-loading">
                     <!-- Completed tasks will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Due Tasks Tab -->
+            <div id="due-tab" class="tab-content">
+                <div id="due-tasks" hx-get="/app/tasks?filter=incomplete&sort=due&due=has" hx-trigger="load, reload from:body" hx-swap="innerHTML" hx-indicator="#tasks-loading">
+                    <!-- Tasks with due dates will be loaded here, sorted by due date -->
                 </div>
             </div>
 
@@ -791,7 +893,30 @@
                 </div>
             </div>
         </section>
+
+        <!-- Settings Dialog (Modal) -->
+        <dialog id="settings-dialog">
+            <article style="max-width: 600px;">
+                <header>
+                    <button aria-label="Close" rel="prev" onclick="closeSettings()"></button>
+                    <h2>Settings</h2>
+                </header>
+                {{template "notification-settings.html"}}
+            </article>
+        </dialog>
     </main>
+
+    <script>
+        function showSettings() {
+            const dialog = document.getElementById('settings-dialog');
+            dialog.showModal();
+        }
+
+        function closeSettings() {
+            const dialog = document.getElementById('settings-dialog');
+            dialog.close();
+        }
+    </script>
 
     <footer class="container">
         <p style="text-align: center; color: var(--pico-muted-color); font-size: 0.875rem;">
@@ -1326,6 +1451,114 @@
 
         // Re-run after HTMX swaps (for edit forms)
         document.body.addEventListener('htmx:afterSwap', setupTagValidation);
+
+        // ===== NOTIFICATION CHECKING LOGIC =====
+        let notificationCheckInterval = null;
+        let lastNotificationState = { overdue: 0, today: 0, soon: 0 };
+        let notificationDismissed = false;
+
+        function checkForUpcomingTasks() {
+            const now = new Date();
+            // Only check incomplete tasks in the incomplete-tasks container
+            const incompleteTasks = document.querySelectorAll('#incomplete-tasks .task-item:not(.completed)');
+
+            let overdueCount = 0;
+            let dueTodayCount = 0;
+            let dueSoonCount = 0;
+
+            incompleteTasks.forEach(task => {
+                // Look for the due date time element specifically in .task-due-date container
+                const dueDateContainer = task.querySelector('.task-due-date');
+                if (!dueDateContainer) return; // Skip tasks without due dates
+
+                const dueDateElement = dueDateContainer.querySelector('time[datetime]');
+                if (!dueDateElement) return;
+
+                const datetimeAttr = dueDateElement.getAttribute('datetime');
+                if (!datetimeAttr) return;
+
+                const dueDate = new Date(datetimeAttr);
+
+                // Validate the date is valid
+                if (isNaN(dueDate.getTime())) {
+                    console.warn('Invalid due date found:', datetimeAttr);
+                    return;
+                }
+
+                const diffHours = (dueDate - now) / (1000 * 60 * 60);
+
+                if (diffHours < 0) {
+                    overdueCount++;
+                } else if (diffHours < 24) {
+                    dueTodayCount++;
+                } else if (diffHours < 72) {
+                    dueSoonCount++;
+                }
+            });
+
+            // Check if the state has changed (counts increased)
+            const stateChanged =
+                overdueCount > lastNotificationState.overdue ||
+                dueTodayCount > lastNotificationState.today ||
+                dueSoonCount > lastNotificationState.soon;
+
+            // Reset dismissed flag if state changed
+            if (stateChanged) {
+                notificationDismissed = false;
+            }
+
+            // Update last state
+            lastNotificationState = { overdue: overdueCount, today: dueTodayCount, soon: dueSoonCount };
+
+            showNotificationBanner(overdueCount, dueTodayCount, dueSoonCount);
+        }
+
+        function showNotificationBanner(overdue, today, soon) {
+            const banner = document.getElementById('notification-banner');
+            const title = document.getElementById('notification-title');
+            const text = document.getElementById('notification-text');
+
+            // Don't show if user dismissed it
+            if (notificationDismissed) {
+                banner.style.display = 'none';
+                return;
+            }
+
+            if (overdue > 0) {
+                banner.className = 'notification-banner error';
+                title.textContent = `${overdue} overdue task${overdue > 1 ? 's' : ''}!`;
+                text.textContent = ' Please review your tasks.';
+                banner.style.display = 'block';
+            } else if (today > 0) {
+                banner.className = 'notification-banner warning';
+                title.textContent = `${today} task${today > 1 ? 's' : ''} due today.`;
+                text.textContent = ' Stay on track!';
+                banner.style.display = 'block';
+            } else if (soon > 0) {
+                banner.className = 'notification-banner';
+                title.textContent = `${soon} task${soon > 1 ? 's' : ''} due soon.`;
+                text.textContent = ' Plan ahead!';
+                banner.style.display = 'block';
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
+        function dismissNotificationBanner() {
+            notificationDismissed = true;
+            document.getElementById('notification-banner').style.display = 'none';
+        }
+
+        // Check on page load and after HTMX swaps
+        document.addEventListener('DOMContentLoaded', checkForUpcomingTasks);
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            if (evt.detail.target.id && evt.detail.target.id.includes('tasks')) {
+                setTimeout(checkForUpcomingTasks, 100);
+            }
+        });
+
+        // Re-check every 5 minutes
+        notificationCheckInterval = setInterval(checkForUpcomingTasks, 5 * 60 * 1000);
 
     </script>
 </body>

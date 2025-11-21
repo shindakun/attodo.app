@@ -14,6 +14,20 @@
         </div>
         {{end}}
 
+        {{if .DueDate}}
+        <div class="task-due-date {{if .IsOverdue}}overdue{{end}} {{if .IsDueToday}}due-today{{end}} {{if .IsDueSoon}}due-soon{{end}}" style="margin-top: 0.5rem;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.25rem;">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <time datetime="{{formatDate .DueDate}}">
+                Due: {{.DueDateDisplay}}
+            </time>
+        </div>
+        {{end}}
+
         <small>Created: <time class="local-time" datetime="{{formatDate .CreatedAt}}">{{formatDate .CreatedAt}}</time></small>
         {{if .CompletedAt}}
         <small> • Completed: <time class="local-time" datetime="{{formatDate .CompletedAt}}">{{formatDate .CompletedAt}}</time></small>
@@ -51,6 +65,18 @@
                 <input type="text" name="tags" id="tags-{{.RKey}}" value="{{joinTags .Tags}}" placeholder="work, urgent, personal">
                 <small>Separate tags with commas (max 10 tags, 30 characters each). Emoji supported! 🎯</small>
             </label>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem;">
+                <label>
+                    Due Date (optional)
+                    <input type="date" name="dueDate" value="{{if .DueDate}}{{formatDateInput .DueDate}}{{end}}">
+                </label>
+                <label>
+                    Time (optional)
+                    <input type="time" name="dueTime" value="{{if .DueDate}}{{formatTimeInput .DueDate}}{{end}}">
+                </label>
+            </div>
+            <small style="display: block; margin-top: -0.5rem; margin-bottom: 0.5rem;">Or type date/time in title (e.g., "tomorrow at 3pm" or "11/26 3:30pm meeting")</small>
 
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
                 <button type="submit">Save</button>

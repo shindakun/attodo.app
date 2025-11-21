@@ -459,9 +459,59 @@ func (h *ListHandler) handleManageTasks(w http.ResponseWriter, r *http.Request) 
 
 	log.Printf("Task %s %sd to/from list %s", taskURI, action, rkey)
 
-	// Return success
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Success"))
+	// Extract task rkey from URI (e.g., at://did:plc:xxx/app.attodo.task/rkey)
+	taskRKey := extractRKey(taskURI)
+
+	// Fetch the updated task to return it with its new list associations
+	var taskRecord map[string]interface{}
+	sess, err = h.WithRetry(r.Context(), sess, func(s *bskyoauth.Session) error {
+		var fetchErr error
+		taskRecord, fetchErr = h.getTaskRecord(r.Context(), s, taskRKey)
+		return fetchErr
+	})
+
+	if err != nil {
+		log.Printf("Failed to fetch updated task %s: %v", taskRKey, err)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Success"))
+		return
+	}
+
+	// Parse task
+	task := parseTaskRecord(taskRecord)
+	task.RKey = taskRKey
+	task.URI = taskURI
+
+	// Get all lists to populate the Lists field for this task
+	var allLists []*models.TaskList
+	sess, err = h.WithRetry(r.Context(), sess, func(s *bskyoauth.Session) error {
+		var fetchErr error
+		allLists, fetchErr = h.ListRecords(r.Context(), s)
+		return fetchErr
+	})
+
+	if err == nil {
+		// Find lists that contain this task
+		taskLists := make([]*models.TaskList, 0)
+		for _, l := range allLists {
+			for _, uri := range l.TaskURIs {
+				if uri == taskURI {
+					taskLists = append(taskLists, l)
+					break
+				}
+			}
+		}
+		task.Lists = taskLists
+	}
+
+	// Update session (already updated from last WithRetry call above)
+	if cookie != nil {
+		h.client.UpdateSession(cookie.Value, sess)
+	}
+
+	// Return updated task partial for HTMX to swap
+	w.Header().Set("Content-Type", "text/html")
+	Render(w, "task-item.html", task)
 }
 
 // handleDeleteList deletes a list
@@ -804,6 +854,12 @@ func parseTaskRecord(record map[string]interface{}) *models.Task {
 	if completedAt, ok := record["completedAt"].(string); ok {
 		if t, err := time.Parse(time.RFC3339, completedAt); err == nil {
 			task.CompletedAt = &t
+		}
+	}
+	// Parse due date if present
+	if dueDate, ok := record["dueDate"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, dueDate); err == nil {
+			task.DueDate = &t
 		}
 	}
 	// Parse tags
