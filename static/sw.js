@@ -132,6 +132,11 @@ self.addEventListener('message', (event) => {
 // Notification permission state
 let notificationsEnabled = false;
 
+// Cached settings to avoid excessive fetches
+let cachedSettings = null;
+let settingsCacheTime = 0;
+const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 // Check for due tasks periodically
 self.addEventListener('periodicsync', (event) => {
   if (event.tag === 'check-due-tasks') {
@@ -167,31 +172,56 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+// Get settings with caching to avoid excessive fetches
+async function getSettings() {
+  const now = Date.now();
+
+  // Return cached settings if still valid
+  if (cachedSettings && (now - settingsCacheTime) < SETTINGS_CACHE_TTL) {
+    return cachedSettings;
+  }
+
+  // Fetch fresh settings from server
+  try {
+    const settingsResponse = await fetch('/app/settings', {
+      credentials: 'include'
+    });
+
+    if (settingsResponse.ok) {
+      cachedSettings = await settingsResponse.json();
+      settingsCacheTime = now;
+      return cachedSettings;
+    }
+  } catch (err) {
+    // Network error or server unavailable
+  }
+
+  // If we have stale cached settings, use them as fallback
+  if (cachedSettings) {
+    return cachedSettings;
+  }
+
+  // Use default settings if no cache and fetch failed
+  cachedSettings = {
+    notifyOverdue: true,
+    notifyToday: true,
+    notifySoon: false,
+    hoursBefore: 2,
+    quietHoursEnabled: false,
+    quietStart: 22,
+    quietEnd: 8
+  };
+  settingsCacheTime = now;
+  return cachedSettings;
+}
+
 // Check tasks and send notifications
 async function checkDueTasksAndNotify() {
   try {
-    // Get notification settings from AT Protocol
-    let settings = null;
-    try {
-      const settingsResponse = await fetch('/app/settings', {
-        credentials: 'include'
-      });
-      if (settingsResponse.ok) {
-        settings = await settingsResponse.json();
-      }
-    } catch (err) {
-      // Could not load settings, using defaults
-    }
-
-    // Use default settings if none available
+    // Get notification settings from AT Protocol (with caching)
+    const settings = await getSettings();
     if (!settings) {
-      settings = {
-        notifyOverdue: true,
-        notifyToday: true,
-        notifySoon: false,
-        hoursBefore: 2,
-        quietHoursEnabled: false
-      };
+      return; // Failed to get settings
     }
 
     // Check quiet hours
