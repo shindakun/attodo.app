@@ -15,6 +15,8 @@ import (
 	"github.com/shindakun/attodo/internal/jobs"
 	"github.com/shindakun/attodo/internal/middleware"
 	"github.com/shindakun/attodo/internal/push"
+	stripeClient "github.com/shindakun/attodo/internal/stripe"
+	"github.com/shindakun/attodo/internal/supporter"
 )
 
 func main() {
@@ -34,6 +36,10 @@ func main() {
 
 	// Initialize repositories
 	notificationRepo := database.NewNotificationRepo(db)
+	supporterRepo := database.NewSupporterRepo(db)
+
+	// Initialize services
+	supporterService := supporter.NewService(supporterRepo)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(cfg)
@@ -42,6 +48,16 @@ func main() {
 	listHandler := handlers.NewListHandler(authHandler.Client())
 	settingsHandler := handlers.NewSettingsHandler(authHandler.Client())
 	pushHandler := handlers.NewPushHandler(notificationRepo)
+
+	// Initialize Stripe client and supporter handler (only if Stripe keys are configured)
+	var supporterHandler *handlers.SupporterHandler
+	if cfg.StripeSecretKey != "" && cfg.StripePriceID != "" {
+		stripe := stripeClient.NewClient(cfg.StripeSecretKey, cfg.StripeWebhookSecret, cfg.StripePriceID)
+		supporterHandler = handlers.NewSupporterHandler(supporterService, stripe, cfg.BaseURL)
+		log.Println("Stripe integration initialized")
+	} else {
+		log.Println("Stripe keys not configured - supporter features disabled")
+	}
 
 	// Wire up cross-references between handlers
 	taskHandler.SetListHandler(listHandler)
@@ -146,6 +162,18 @@ func main() {
 	logRoute("POST /app/push/test [protected]")
 	mux.Handle("/app/push/check", authMiddleware.RequireAuth(http.HandlerFunc(pushHandler.HandleCheckTasks)))
 	logRoute("POST /app/push/check [protected]")
+
+	// Supporter routes (only if Stripe is configured)
+	if supporterHandler != nil {
+		mux.Handle("/supporter/status", authMiddleware.RequireAuth(http.HandlerFunc(supporterHandler.HandleGetStatus)))
+		logRoute("GET /supporter/status [protected]")
+		mux.Handle("/supporter/checkout", authMiddleware.RequireAuth(http.HandlerFunc(supporterHandler.HandleCreateCheckoutSession)))
+		logRoute("GET /supporter/checkout [protected]")
+		mux.Handle("/supporter/portal", authMiddleware.RequireAuth(http.HandlerFunc(supporterHandler.HandleCreatePortalSession)))
+		logRoute("GET /supporter/portal [protected]")
+		mux.HandleFunc("/supporter/webhook", supporterHandler.HandleStripeWebhook)
+		logRoute("POST /supporter/webhook [public - webhook]")
+	}
 
 	// Log all registered routes
 	log.Println("Registered routes:")

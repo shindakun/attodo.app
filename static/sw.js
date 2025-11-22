@@ -1,5 +1,5 @@
 // Service Worker for AT Todo
-const CACHE_NAME = 'attodo-v1';
+const CACHE_NAME = 'attodo-v4'; // Added server ping for periodic checks
 const HEALTH_CHECK_INTERVAL = 60000; // 60 seconds
 
 // Install event - cache essential resources
@@ -37,20 +37,25 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - network first, fall back to cache
 self.addEventListener('fetch', (event) => {
+  // For non-GET requests, just pass through to network without caching
+  if (event.request.method !== 'GET') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // For GET requests: network first, fall back to cache
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Only cache GET requests (Cache API doesn't support PUT, POST, DELETE, etc.)
-        if (event.request.method === 'GET') {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
+        // Cache successful GET responses
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
         return response;
       })
       .catch(() => {
-        // If network fails, try cache (only works for GET requests)
+        // If network fails, try cache
         return caches.match(event.request);
       })
   );
@@ -65,6 +70,13 @@ async function checkHealth() {
     });
 
     if (response.ok) {
+      // Verify content type before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Health check returned non-JSON response:', contentType);
+        throw new Error('Invalid content-type for health check');
+      }
+
       const data = await response.json();
       console.log('Health check passed:', data);
 
@@ -129,6 +141,50 @@ self.addEventListener('message', (event) => {
 // NOTIFICATION SYSTEM
 // ============================================================================
 
+// Handle push notifications
+self.addEventListener('push', (event) => {
+  console.log('[Push] Push notification received:', event);
+
+  // Default notification data
+  let notificationData = {
+    title: 'AT Todo',
+    body: 'You have a new notification',
+    icon: '/static/icon-192.png',
+    badge: '/static/icon-192.png',
+  };
+
+  // Parse the notification payload if present
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      console.log('[Push] Payload:', payload);
+
+      notificationData = {
+        title: payload.title || notificationData.title,
+        body: payload.body || notificationData.body,
+        icon: payload.icon || notificationData.icon,
+        badge: payload.badge || notificationData.badge,
+        tag: payload.tag,
+        data: payload.data,
+      };
+    } catch (err) {
+      console.error('[Push] Failed to parse notification payload:', err);
+    }
+  }
+
+  // Show the notification
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      tag: notificationData.tag,
+      data: notificationData.data,
+      vibrate: [200, 100, 200],
+    })
+  );
+});
+
 // Notification permission state
 let notificationsEnabled = false;
 
@@ -140,16 +196,39 @@ const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 // Check for due tasks periodically
 self.addEventListener('periodicsync', (event) => {
   if (event.tag === 'check-due-tasks') {
-    event.waitUntil(checkDueTasksAndNotify());
+    event.waitUntil(
+      Promise.all([
+        checkDueTasksAndNotify(),  // Client-side notification display
+        pingServerForCheck()        // Ping server (for future server-side push)
+      ])
+    );
   }
 });
 
 // Handle background sync
 self.addEventListener('sync', (event) => {
   if (event.tag === 'check-tasks') {
-    event.waitUntil(checkDueTasksAndNotify());
+    event.waitUntil(
+      Promise.all([
+        checkDueTasksAndNotify(),
+        pingServerForCheck()
+      ])
+    );
   }
 });
+
+// Ping server for notification check (for future server-side checking)
+async function pingServerForCheck() {
+  try {
+    await fetch('/app/push/check', {
+      method: 'POST',
+      credentials: 'include'
+    });
+  } catch (err) {
+    // Silently fail - server may not be available
+    console.log('[Push] Server check ping failed:', err.message);
+  }
+}
 
 // Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
@@ -221,6 +300,7 @@ async function checkDueTasksAndNotify() {
     // Get notification settings from AT Protocol (with caching)
     const settings = await getSettings();
     if (!settings) {
+      console.warn('[Notifications] Failed to get settings');
       return; // Failed to get settings
     }
 
@@ -236,21 +316,36 @@ async function checkDueTasksAndNotify() {
         : (hour >= quietStart && hour < quietEnd);
 
       if (isQuiet) {
+        console.log('[Notifications] Quiet hours active, skipping');
         return;
       }
     }
 
     // Fetch tasks as JSON
     const tasksResponse = await fetch('/app/tasks?filter=incomplete&format=json', {
-      credentials: 'include'
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json'
+      }
     });
 
     if (!tasksResponse.ok) {
+      console.error('[Notifications] Failed to fetch tasks:', tasksResponse.status, tasksResponse.statusText);
+      return;
+    }
+
+    // Verify content type
+    const contentType = tasksResponse.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error('[Notifications] Tasks endpoint returned non-JSON response:', contentType);
+      const text = await tasksResponse.text();
+      console.error('[Notifications] Response body (first 200 chars):', text.substring(0, 200));
       return;
     }
 
     const data = await tasksResponse.json();
-    const tasks = data.tasks || data; // Handle both {tasks: []} and [] formats
+    const tasks = Array.isArray(data) ? data : (data.tasks || []);
+    console.log(`[Notifications] Fetched ${tasks.length} tasks`)
 
     // Group tasks by notification type
     const groups = {
@@ -287,7 +382,8 @@ async function checkDueTasksAndNotify() {
     // Send grouped notifications
     await sendGroupedNotifications(groups, settings);
   } catch (error) {
-    // Error checking tasks for notifications
+    console.error('[Notifications] Error checking tasks:', error);
+    console.error('[Notifications] Stack trace:', error.stack);
   }
 }
 

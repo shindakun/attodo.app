@@ -3,10 +3,13 @@ module github.com/shindakun/attodo
 go 1.25.4
 
 require (
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/bluesky-social/indigo v0.0.0-20251029012702-8c31d8b88187
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
 	github.com/joho/godotenv v1.5.1
+	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/shindakun/bskyoauth v1.4.2
+	github.com/stripe/stripe-go/v84 v84.0.0
 )
 
 require (
