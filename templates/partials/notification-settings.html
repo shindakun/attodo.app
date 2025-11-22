@@ -9,7 +9,7 @@
         </p>
         <div id="registered-devices" style="display: none; margin-top: 1rem;">
             <p><strong>Registered Devices:</strong></p>
-            <ul id="device-list" style="font-size: 0.9rem; color: var(--pico-muted-color);"></ul>
+            <ul id="device-list" style="font-size: 0.9rem; color: var(--pico-muted-color); list-style: none; padding: 0;"></ul>
         </div>
     </div>
 
@@ -183,9 +183,23 @@ async function loadRegisteredDevices() {
             deviceList.innerHTML = '';
             subscriptions.forEach((sub, index) => {
                 const li = document.createElement('li');
+                li.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; margin: 0.25rem 0; border: 1px solid var(--pico-muted-border-color); border-radius: var(--pico-border-radius);';
+
+                const deviceInfo = document.createElement('span');
                 const userAgent = sub.userAgent || 'Unknown device';
                 const createdAt = new Date(sub.createdAt).toLocaleDateString();
-                li.textContent = `Device ${index + 1}: ${userAgent.substring(0, 50)}... (added ${createdAt})`;
+                deviceInfo.textContent = `Device ${index + 1}: ${userAgent.substring(0, 50)}... (added ${createdAt})`;
+                deviceInfo.style.flex = '1';
+
+                const removeBtn = document.createElement('button');
+                removeBtn.innerHTML = '&times;';
+                removeBtn.className = 'secondary';
+                removeBtn.style.cssText = 'padding: 0.25rem 0.5rem; margin: 0; font-size: 1.25rem; line-height: 1; min-width: auto;';
+                removeBtn.setAttribute('aria-label', 'Remove device');
+                removeBtn.onclick = () => removeDevice(sub.endpoint, li);
+
+                li.appendChild(deviceInfo);
+                li.appendChild(removeBtn);
                 deviceList.appendChild(li);
             });
 
@@ -193,6 +207,82 @@ async function loadRegisteredDevices() {
         }
     } catch (error) {
         console.error('Failed to load registered devices:', error);
+    }
+}
+
+async function removeDevice(endpoint, listItem) {
+    if (!confirm('Remove this device from receiving notifications?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/app/push/unsubscribe', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ endpoint })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to unsubscribe: ${response.status} ${errorText}`);
+        }
+
+        const result = await response.json();
+
+        // Remove the device from the UI with animation
+        listItem.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
+        listItem.style.opacity = '0';
+        listItem.style.transform = 'translateX(-20px)';
+
+        setTimeout(async () => {
+            listItem.remove();
+
+            // Check if this was the last device
+            const deviceList = document.getElementById('device-list');
+            if (deviceList.children.length === 0) {
+                document.getElementById('registered-devices').style.display = 'none';
+
+                // If we removed the current device, disable notifications UI
+                const currentEndpoint = await getCurrentDeviceEndpoint();
+                if (currentEndpoint === endpoint) {
+                    // Reset UI to not enabled state
+                    const statusEl = document.getElementById('notification-permission-status');
+                    const registerBtn = document.getElementById('register-device');
+                    const prefsEl = document.getElementById('notification-preferences');
+
+                    statusEl.textContent = 'Not enabled';
+                    statusEl.style.color = '';
+                    registerBtn.style.display = 'none';
+                    prefsEl.style.display = 'none';
+
+                    // Show enable button
+                    document.getElementById('enable-notifications').style.display = 'block';
+                }
+            }
+
+            showToast('Device removed from notifications', 'success');
+        }, 300);
+
+    } catch (error) {
+        console.error('Failed to remove device:', error);
+        showToast('Failed to remove device: ' + error.message, 'error');
+    }
+}
+
+async function getCurrentDeviceEndpoint() {
+    try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            return null;
+        }
+
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        return subscription ? subscription.endpoint : null;
+    } catch (error) {
+        console.error('Failed to get current device endpoint:', error);
+        return null;
     }
 }
 
@@ -206,11 +296,13 @@ async function requestNotificationPermission() {
             // Update UI to show preferences
             const statusEl = document.getElementById('notification-permission-status');
             const enableBtn = document.getElementById('enable-notifications');
+            const registerBtn = document.getElementById('register-device');
             const prefsEl = document.getElementById('notification-preferences');
 
             statusEl.textContent = 'Enabled ✓';
             statusEl.style.color = 'var(--pico-primary)';
             enableBtn.style.display = 'none';
+            registerBtn.style.display = 'inline-block';
             prefsEl.style.display = 'block';
 
             // Load current settings or use defaults (this populates the form)
@@ -237,7 +329,17 @@ async function requestNotificationPermission() {
             }
 
             // Subscribe to push notifications
-            await subscribeToPush();
+            const subResult = await subscribeToPush();
+
+            // Show registration feedback
+            if (subResult && subResult.message === 'Subscription created successfully') {
+                showToast('Device registered for notifications!', 'success', 2000);
+            } else if (subResult && subResult.message === 'Subscription already exists') {
+                showToast('Device already registered', 'info', 2000);
+            }
+
+            // Reload devices list to show the new registration
+            await loadRegisteredDevices();
 
             // Register periodic sync for background notifications
             await registerPeriodicSync();
@@ -246,7 +348,7 @@ async function requestNotificationPermission() {
         }
     } catch (error) {
         console.error('Error requesting notification permission:', error);
-        showToast('Failed to enable notifications', 'error');
+        showToast('Failed to enable notifications: ' + error.message, 'error');
     }
 }
 
@@ -415,11 +517,16 @@ async function subscribeToPush() {
             throw new Error(`Failed to register push subscription: ${subscribeResponse.status} ${errorText}`);
         }
 
-        console.log('[Push] Subscription registered successfully');
+        const result = await subscribeResponse.json();
+        console.log('[Push] Subscription registered successfully:', result.message);
+
+        // Return the result so caller can show appropriate message
+        return result;
     } catch (error) {
         console.error('[Push] Failed to subscribe:', error);
         // Don't show toast on page load - only when user explicitly enables
         // showToast('Failed to set up push notifications', 'error');
+        throw error;
     }
 }
 
@@ -503,12 +610,24 @@ document.getElementById('enable-notifications')?.addEventListener('click', reque
 // Add event listener for register device button
 document.getElementById('register-device')?.addEventListener('click', async () => {
     try {
-        await subscribeToPush();
+        const result = await subscribeToPush();
         await loadRegisteredDevices();
-        showToast('Device registration refreshed!', 'success');
+
+        // Show appropriate message based on backend response
+        if (result && result.message) {
+            if (result.message === 'Subscription already exists') {
+                showToast('This device is already registered for notifications', 'info');
+            } else if (result.message === 'Subscription created successfully') {
+                showToast('Device registered successfully!', 'success');
+            } else {
+                showToast('Device registration updated', 'success');
+            }
+        } else {
+            showToast('Device registration refreshed!', 'success');
+        }
     } catch (error) {
         console.error('Failed to register device:', error);
-        showToast('Failed to register device', 'error');
+        showToast('Failed to register device: ' + error.message, 'error');
     }
 });
 </script>

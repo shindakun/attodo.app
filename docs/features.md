@@ -270,10 +270,24 @@ AT Todo includes a comprehensive notification system to help you stay on top of 
 Get notified even when AT Todo isn't open.
 
 **Enabling Push Notifications:**
-1. Open Settings
-2. Click "Enable Push Notifications"
-3. Grant permission when prompted
-4. Configure your preferences
+
+1. **Open Settings**:
+   - Click the "Settings" link in the top navigation bar
+   - A settings dialog (modal) will open
+
+2. **Find Notification Settings**:
+   - In the Settings dialog, scroll to "Notification Settings"
+   - You'll see your current notification status
+
+3. **Enable Notifications**:
+   - Click "Enable Push Notifications" button
+   - Your browser will ask for permission - click "Allow"
+   - The page will automatically subscribe this device
+
+4. **Configure Your Preferences**:
+   - Once enabled, notification preferences will appear
+   - Customize timing, frequency, and quiet hours
+   - Click "Save Preferences"
 
 **Notification Settings:**
 
@@ -338,19 +352,55 @@ AT Todo learns when you typically use the app and can optimize notification timi
 - **Privacy-first**: All tracking stored in your AT Protocol repository
 - **Automatic**: No configuration needed
 
+### Multi-Device Notifications
+
+AT Todo supports receiving notifications on multiple devices (phone, tablet, desktop, etc.).
+
+**Registering Multiple Devices:**
+
+Each device needs to be registered separately to receive notifications:
+
+1. **On Each Device**:
+   - Open AT Todo in your browser
+   - Click the "Settings" link in the top navigation
+   - Scroll to "Notification Settings" in the settings dialog
+   - Click "Enable Push Notifications" (or "Register This Device" if already enabled)
+   - Grant browser permission when prompted
+
+2. **Verify Registration**:
+   - In Settings, look for "Registered Devices" section
+   - You should see a list of all your registered devices
+   - Each device shows its browser/OS and registration date
+   - Example: "Device 1: Mozilla/5.0 (Macintosh; Intel Mac OS...) (added 11/22/2024)"
+
+3. **Managing Devices**:
+   - Click the X button next to any device to remove it from notifications
+   - Devices can be re-registered at any time by clicking "Register This Device"
+   - Remove old/unused devices to keep your device list clean
+   - Inactive subscriptions expire automatically over time
+
+**How It Works:**
+- Each browser/device gets a unique push subscription
+- Notifications are sent to **all registered devices simultaneously**
+- You'll receive notifications on your phone, tablet, and desktop
+- Completing a task on one device doesn't clear notifications on others
+
 ### Test Notifications
 
 **Test your notification setup:**
 1. Open Settings
 2. Enable notifications if not already enabled
 3. Click "Send Test Notification"
-4. You should see a test notification appear
+4. You should see a test notification on **all registered devices**
+5. Check the response message to see how many devices received it
 
 **If notifications aren't working:**
 - Check browser notification permissions
 - Ensure notifications aren't blocked in system settings
 - Try a different browser (Chrome/Edge have best support)
 - Check quiet hours settings
+- Click "Register This Device" to refresh registration
+- Verify device appears in "Registered Devices" list
 
 ### Browser Compatibility
 
