@@ -1,0 +1,55 @@
+{
+  "lexicon": 1,
+  "id": "app.attodo.task",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A todo task with optional due date, tags, and completion status",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["title", "completed", "createdAt"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "The task title"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 3000,
+            "description": "Optional detailed description of the task"
+          },
+          "completed": {
+            "type": "boolean",
+            "description": "Whether the task has been completed"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the task was created"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the task was completed"
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the task is due"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "maxLength": 10,
+            "description": "User-defined tags for categorization"
+          }
+        }
+      }
+    }
+  }
+}

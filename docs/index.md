@@ -74,7 +74,7 @@ AT Todo uses the AT Protocol's repository system to store tasks as records. Each
 - **Status** - Whether the task is completed or not
 - **Timestamps** - When the task was created and completed
 
-All tasks are stored in your personal AT Protocol repository under the `app.attodo.task` lexicon. Lists are stored under `app.attodo.list`, and your preferences are stored under `app.attodo.settings`. See the [lexicon definitions](https://github.com/shindakun/attodo/tree/main/lexicons) for full schema details.
+All tasks are stored in your personal AT Protocol repository under the `app.attodo.task` lexicon. Lists are stored under `app.attodo.list`, and your preferences are stored under `app.attodo.settings`. See the [lexicon definitions](https://github.com/shindakun/attodo.app/tree/main/lexicons) for full schema details.
 
 ## Using Tags
 

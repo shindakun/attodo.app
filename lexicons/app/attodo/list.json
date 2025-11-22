@@ -1,0 +1,45 @@
+{
+  "lexicon": 1,
+  "id": "app.attodo.list",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A collection of tasks organized into a named list",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["name", "taskUris", "createdAt", "updatedAt"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "The name of the list (e.g., 'Work', 'Personal', 'Shopping')"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Optional description of the list"
+          },
+          "taskUris": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "at-uri"
+            },
+            "description": "Array of AT URIs referencing tasks in this list"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the list was created"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the list was last updated"
+          }
+        }
+      }
+    }
+  }
+}

@@ -20,6 +20,9 @@ type NotificationSettings struct {
 	// Notification permissions
 	PushEnabled bool `json:"pushEnabled"` // Browser push notifications enabled
 
+	// UI preferences
+	TaskInputCollapsed bool `json:"taskInputCollapsed"` // Whether task input form is collapsed
+
 	// Usage pattern tracking (for smart notification scheduling in Phase 3)
 	AppUsageHours map[string]int `json:"appUsageHours,omitempty"` // Hour (0-23) -> count
 
@@ -34,16 +37,17 @@ type NotificationSettings struct {
 // DefaultNotificationSettings returns default notification settings
 func DefaultNotificationSettings() *NotificationSettings {
 	return &NotificationSettings{
-		NotifyOverdue:     true,
-		NotifyToday:       true,
-		NotifySoon:        false,
-		HoursBefore:       1,
-		CheckFrequency:    30,
-		QuietHoursEnabled: false,
-		QuietStart:        22,
-		QuietEnd:          8,
-		PushEnabled:       false,
-		UpdatedAt:         time.Now().UTC(),
-		RKey:              "settings",
+		NotifyOverdue:      true,
+		NotifyToday:        true,
+		NotifySoon:         false,
+		HoursBefore:        1,
+		CheckFrequency:     30,
+		QuietHoursEnabled:  false,
+		QuietStart:         22,
+		QuietEnd:           8,
+		PushEnabled:        false,
+		TaskInputCollapsed: false,
+		UpdatedAt:          time.Now().UTC(),
+		RKey:               "settings",
 	}
 }

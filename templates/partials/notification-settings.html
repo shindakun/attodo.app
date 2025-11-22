@@ -79,6 +79,20 @@
             <button onclick="testNotification()" class="secondary">Send Test Notification</button>
         </div>
     </div>
+
+    <hr>
+
+    <h3>User Interface Preferences</h3>
+
+    <label>
+        <input type="checkbox" id="task-input-collapsed">
+        Collapse task input form by default
+        <small style="display: block; margin-top: 0.25rem; color: var(--pico-muted-color);">
+            When enabled, the "Add New Task" form will be collapsed when you visit the dashboard. You can still use the Command Bar (Cmd+Shift+P) to quickly add tasks.
+        </small>
+    </label>
+
+    <button onclick="saveUIPreferences()">Save UI Preferences</button>
 </article>
 
 <script>
@@ -109,7 +123,8 @@ async function loadSettings() {
             quietHoursEnabled: false,
             quietStart: 22,
             quietEnd: 8,
-            pushEnabled: false
+            pushEnabled: false,
+            taskInputCollapsed: false
         };
     }
 }
@@ -146,7 +161,10 @@ async function initNotificationSettings() {
     const prefsEl = document.getElementById('notification-preferences');
 
     // Load settings from AT Protocol
-    await loadNotificationSettings();
+    const settings = await loadNotificationSettings();
+
+    // Check if user has pushEnabled from another device
+    const pushEnabledOnAnyDevice = settings && settings.pushEnabled === true;
 
     if (permission === 'granted') {
         statusEl.textContent = 'Enabled ✓';
@@ -162,9 +180,25 @@ async function initNotificationSettings() {
     } else if (permission === 'denied') {
         statusEl.textContent = 'Blocked (check browser settings)';
         statusEl.style.color = 'var(--pico-del-color)';
+
+        // If user has notifications enabled on other devices, show preferences
+        if (pushEnabledOnAnyDevice) {
+            prefsEl.style.display = 'block';
+        }
     } else {
-        statusEl.textContent = 'Not enabled';
-        enableBtn.style.display = 'block';
+        // Permission is 'default' (not yet asked)
+        if (pushEnabledOnAnyDevice) {
+            // User has notifications enabled on another device
+            statusEl.textContent = 'Not enabled on this device';
+            statusEl.style.color = 'var(--pico-muted-color)';
+            enableBtn.style.display = 'block';
+            prefsEl.style.display = 'block'; // Show preferences
+            registerBtn.style.display = 'none'; // Hide register button until permission granted
+        } else {
+            // First time setup
+            statusEl.textContent = 'Not enabled';
+            enableBtn.style.display = 'block';
+        }
     }
 }
 
@@ -387,6 +421,9 @@ async function loadNotificationSettings() {
         if (settings.quietEnd !== undefined) {
             document.getElementById('quiet-end').value = settings.quietEnd;
         }
+        if (settings.taskInputCollapsed !== undefined) {
+            document.getElementById('task-input-collapsed').checked = settings.taskInputCollapsed;
+        }
 
         return settings;
     } catch (error) {
@@ -463,6 +500,43 @@ async function testNotification() {
     } catch (error) {
         console.error('Test notification error:', error);
         showToast('Error: ' + error.message, 'error');
+    }
+}
+
+// Save UI preferences
+async function saveUIPreferences() {
+    try {
+        // Load current settings first
+        const settings = await loadSettings();
+
+        // Update only the taskInputCollapsed field
+        settings.taskInputCollapsed = document.getElementById('task-input-collapsed').checked;
+
+        // Save back to server
+        const updatedSettings = await saveSettings(settings);
+        currentSettings = updatedSettings;
+        showToast('UI preferences saved!', 'success');
+
+        // Update the dashboard task input form state immediately
+        const taskInputForm = document.getElementById('task-input-form');
+        const toggleIcon = document.getElementById('toggle-icon');
+        if (taskInputForm && toggleIcon) {
+            if (settings.taskInputCollapsed) {
+                taskInputForm.style.display = 'none';
+                toggleIcon.textContent = '+';
+            } else {
+                taskInputForm.style.display = 'block';
+                toggleIcon.textContent = '−';
+            }
+        }
+
+        // Close the settings modal
+        if (typeof closeSettings === 'function') {
+            closeSettings();
+        }
+    } catch (error) {
+        console.error('Failed to save UI preferences:', error);
+        showToast('Failed to save UI preferences', 'error');
     }
 }
 
@@ -582,24 +656,7 @@ async function registerPeriodicSync() {
     }
 }
 
-// Helper function for toast messages (reuse existing if available)
-function showToast(message, type) {
-    // Simple implementation - can be replaced with existing toast system
-    const toast = document.createElement('div');
-    toast.textContent = message;
-    toast.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 1rem;
-        background: ${type === 'success' ? 'var(--pico-primary)' : 'var(--pico-del-color)'};
-        color: white;
-        border-radius: var(--pico-border-radius);
-        z-index: 9999;
-    `;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-}
+// Note: showToast() function is defined globally in dashboard.html
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', initNotificationSettings);

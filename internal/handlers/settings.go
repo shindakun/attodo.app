@@ -111,6 +111,7 @@ func (h *SettingsHandler) handleUpdateSettings(w http.ResponseWriter, r *http.Re
 		"quietStart":        settings.QuietStart,
 		"quietEnd":          settings.QuietEnd,
 		"pushEnabled":       settings.PushEnabled,
+		"taskInputCollapsed": settings.TaskInputCollapsed,
 		"updatedAt":         settings.UpdatedAt.Format(time.RFC3339),
 	}
 
@@ -190,6 +191,9 @@ func parseSettingsRecord(record map[string]interface{}) *models.NotificationSett
 	}
 	if v, ok := record["pushEnabled"].(bool); ok {
 		settings.PushEnabled = v
+	}
+	if v, ok := record["taskInputCollapsed"].(bool); ok {
+		settings.TaskInputCollapsed = v
 	}
 
 	// Parse appUsageHours if present

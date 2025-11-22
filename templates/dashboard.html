@@ -157,10 +157,21 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            z-index: 10000;
+            z-index: 1000; /* High enough for normal page content */
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+        }
+        /* Ensure dialogs have relative positioning for absolute children */
+        dialog {
+            position: relative;
+        }
+        /* Toast containers inside dialogs need absolute positioning to stay within dialog */
+        dialog .toast-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10; /* Above dialog content */
         }
         .toast {
             background-color: var(--pico-background-color);
@@ -458,11 +469,37 @@
                 opacity: 1;
             }
         }
+        /* Task input collapse styles */
+        #task-input-form {
+            transition: opacity 0.3s ease-out, max-height 0.3s ease-out;
+            overflow: hidden;
+        }
+        #task-input-container header button {
+            transition: transform 0.2s ease-out;
+        }
+        #task-input-container header button:hover {
+            transform: scale(1.1);
+        }
     </style>
     <script>
         // Toast notification system
         function showToast(message, type = 'info', duration = 3000) {
-            const container = document.getElementById('toast-container');
+            // Check if there's an open dialog - if so, append toast to it for proper z-index layering
+            const openDialog = document.querySelector('dialog[open]');
+            let container = document.getElementById('toast-container');
+
+            // If dialog is open, create or use a toast container inside the dialog
+            if (openDialog) {
+                let dialogToastContainer = openDialog.querySelector('.toast-container');
+                if (!dialogToastContainer) {
+                    dialogToastContainer = document.createElement('div');
+                    dialogToastContainer.className = 'toast-container';
+                    dialogToastContainer.setAttribute('aria-live', 'polite');
+                    dialogToastContainer.setAttribute('role', 'status');
+                    openDialog.appendChild(dialogToastContainer);
+                }
+                container = dialogToastContainer;
+            }
 
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
@@ -871,8 +908,14 @@
             </hgroup>
 
             <!-- Add Task Form -->
-            <article>
-                <h3>Add New Task</h3>
+            <article id="task-input-container">
+                <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0;">Add New Task</h3>
+                    <button id="toggle-task-input" type="button" class="secondary" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;" aria-label="Toggle task input form">
+                        <span id="toggle-icon">−</span>
+                    </button>
+                </header>
+                <div id="task-input-form">
                 <form
                     hx-post="/app/tasks"
                     hx-target="#incomplete-tasks"
@@ -910,6 +953,7 @@
 
                     <button type="submit">Add Task</button>
                 </form>
+                </div>
             </article>
 
             <!-- Tag Filter (if any tasks have tags) -->
@@ -1024,6 +1068,11 @@
         <p style="text-align: center; color: var(--pico-muted-color); font-size: 0.875rem;">
             Made with ❤ in PDX!
         </p>
+        <p style="text-align: center; font-size: 0.875rem;">
+            <a href="/docs/privacy" style="color: var(--pico-muted-color); text-decoration: none;">Privacy Policy</a>
+            <span style="color: var(--pico-muted-color); margin: 0 0.5rem;">•</span>
+            <a href="/docs/terms" style="color: var(--pico-muted-color); text-decoration: none;">Terms of Service</a>
+        </p>
         <p class="version-info" style="text-align: center; color: var(--pico-muted-color); font-size: 0.75rem;">
             {{getVersion}}-{{getCommitID}}
         </p>
@@ -1070,7 +1119,93 @@
         formatLocalTime();
 
         // Re-run after HTMX swaps content
-        document.body.addEventListener('htmx:afterSwap', formatLocalTime);
+        document.body.addEventListener('htmx:afterSwap', function(event) {
+            // Use setTimeout to ensure DOM is fully updated
+            setTimeout(formatLocalTime, 0);
+        });
+
+        // Task Input Collapse/Expand Functionality
+        async function loadTaskInputPreference() {
+            try {
+                const response = await fetch('/app/settings');
+                if (!response.ok) {
+                    console.error('Failed to load settings');
+                    return;
+                }
+                const settings = await response.json();
+
+                const taskInputForm = document.getElementById('task-input-form');
+                const toggleIcon = document.getElementById('toggle-icon');
+
+                if (settings.taskInputCollapsed) {
+                    taskInputForm.style.display = 'none';
+                    toggleIcon.textContent = '+';
+                } else {
+                    taskInputForm.style.display = 'block';
+                    toggleIcon.textContent = '−';
+                }
+            } catch (error) {
+                console.error('Failed to load task input preference:', error);
+            }
+        }
+
+        async function toggleTaskInput() {
+            const taskInputForm = document.getElementById('task-input-form');
+            const toggleIcon = document.getElementById('toggle-icon');
+            const isCurrentlyCollapsed = taskInputForm.style.display === 'none';
+
+            // Toggle display immediately
+            if (isCurrentlyCollapsed) {
+                taskInputForm.style.display = 'block';
+                toggleIcon.textContent = '−';
+            } else {
+                taskInputForm.style.display = 'none';
+                toggleIcon.textContent = '+';
+            }
+
+            // Save preference to AT Protocol in background
+            try {
+                const response = await fetch('/app/settings');
+                if (!response.ok) {
+                    throw new Error('Failed to load current settings');
+                }
+                const settings = await response.json();
+
+                // Update the taskInputCollapsed field to match new state
+                settings.taskInputCollapsed = !isCurrentlyCollapsed;
+
+                const saveResponse = await fetch('/app/settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(settings)
+                });
+
+                if (!saveResponse.ok) {
+                    throw new Error('Failed to save preference');
+                }
+
+                console.log('[TaskInput] Preference saved:', !isCurrentlyCollapsed);
+            } catch (error) {
+                console.error('[TaskInput] Failed to save preference:', error);
+                // Revert the UI change if save failed
+                if (isCurrentlyCollapsed) {
+                    taskInputForm.style.display = 'none';
+                    toggleIcon.textContent = '+';
+                } else {
+                    taskInputForm.style.display = 'block';
+                    toggleIcon.textContent = '−';
+                }
+                showToast('Failed to save preference', 'error');
+            }
+        }
+
+        // Set up toggle button event listener
+        document.getElementById('toggle-task-input')?.addEventListener('click', toggleTaskInput);
+
+        // Load preference on page load
+        document.addEventListener('DOMContentLoaded', loadTaskInputPreference);
 
         // Tag autocomplete functionality
         let selectedSuggestionIndex = -1;

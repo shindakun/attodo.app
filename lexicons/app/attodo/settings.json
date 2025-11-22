@@ -1,0 +1,83 @@
+{
+  "lexicon": 1,
+  "id": "app.attodo.settings",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "User preferences for notifications and UI settings",
+      "key": "literal:settings",
+      "record": {
+        "type": "object",
+        "required": ["updatedAt"],
+        "properties": {
+          "notifyOverdue": {
+            "type": "boolean",
+            "description": "Show notifications for overdue tasks",
+            "default": true
+          },
+          "notifyToday": {
+            "type": "boolean",
+            "description": "Show notifications for tasks due today",
+            "default": true
+          },
+          "notifySoon": {
+            "type": "boolean",
+            "description": "Show notifications for tasks due within 3 days",
+            "default": false
+          },
+          "hoursBefore": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 72,
+            "description": "Hours before due date to notify",
+            "default": 1
+          },
+          "checkFrequency": {
+            "type": "integer",
+            "enum": [15, 30, 60, 120],
+            "description": "Minutes between notification checks",
+            "default": 30
+          },
+          "quietHoursEnabled": {
+            "type": "boolean",
+            "description": "Enable do-not-disturb mode during quiet hours",
+            "default": false
+          },
+          "quietStart": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23,
+            "description": "Quiet hours start (hour 0-23)",
+            "default": 22
+          },
+          "quietEnd": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23,
+            "description": "Quiet hours end (hour 0-23)",
+            "default": 8
+          },
+          "pushEnabled": {
+            "type": "boolean",
+            "description": "Browser push notifications enabled",
+            "default": false
+          },
+          "taskInputCollapsed": {
+            "type": "boolean",
+            "description": "Whether task input form is collapsed by default",
+            "default": false
+          },
+          "appUsageHours": {
+            "type": "object",
+            "description": "Usage pattern tracking for smart notification scheduling (hour 0-23 -> count)"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Last update timestamp"
+          }
+        }
+      }
+    }
+  }
+}
