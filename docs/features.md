@@ -9,6 +9,7 @@ Comprehensive guide to all AT Todo features and how to use them effectively.
 - [Hashtag Support](#hashtag-support)
 - [Due Dates & Times](#due-dates--times)
 - [Task Organization](#task-organization)
+- [User Interface Preferences](#user-interface-preferences)
 - [Notifications](#notifications)
 - [Lists](#lists)
 - [Progressive Web App](#progressive-web-app)
@@ -245,6 +246,39 @@ Organize related tasks into lists:
 - **Tags**: Click any tag to filter
 - **Lists**: View tasks in specific lists
 - **Due dates**: View overdue, today, or upcoming
+
+---
+
+## User Interface Preferences
+
+AT Todo allows you to customize your interface preferences, which sync across all your devices via AT Protocol.
+
+### Task Input Form Collapse
+
+Minimize screen clutter by collapsing the task input form when you don't need it.
+
+**How to use:**
+
+1. Look for the **−** (minus) button in the top-right corner of the "Add New Task" section
+2. Click the button to collapse the form
+   - The button changes to **+** (plus) when collapsed
+   - The entire task input form is hidden
+3. Click again to expand the form when you need to add tasks
+
+**Benefits:**
+- **More screen space** for viewing your task list
+- **Reduced visual clutter** when you're focused on completing tasks
+- **Synced across devices** - your preference is saved to AT Protocol
+- **Instant toggle** - collapse/expand with a single click
+
+**Cross-Device Sync:**
+
+Your collapse preference is stored in your AT Protocol settings, so it automatically syncs to all your devices:
+- Collapse on your desktop → preference applies on your phone
+- Expand on your tablet → preference applies everywhere
+- Each device loads your saved preference when you visit the dashboard
+
+**Note:** You can still use the Command Bar (`Cmd+Shift+P` or `Ctrl+Shift+P`) to quickly add tasks even when the form is collapsed!
 
 ---
 

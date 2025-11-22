@@ -1,10 +1,10 @@
 # Documentation
 
-Welcome to AT Todo documentation! AT Todo is a decentralized todo application built on the AT Protocol, allowing you to own and control your task data.
+Welcome to the AT Todo documentation! AT Todo is a decentralized todo application built on the [AT Protocol](https://atproto.com/), allowing you to own and control your task data.
 
 ## What is AT Todo?
 
-AT Todo leverages the AT Protocol (the protocol behind Bluesky) to store your tasks in your own personal data repository. This means:
+AT Todo leverages the AT Protocol (the protocol behind Bluesky and other apps) to store your tasks in your own personal data repository. This means:
 
 - **You own your data** - Tasks are stored in your AT Protocol repository
 - **Decentralized** - No central server owns your information
@@ -40,6 +40,12 @@ AT Todo leverages the AT Protocol (the protocol behind Bluesky) to store your ta
 - ✅ Tag autocomplete
 - ✅ Separate views for incomplete and completed tasks
 
+### User Interface
+- ✅ **Collapsible task input** - Minimize screen clutter
+- ✅ **Synced preferences** - UI settings sync across all devices
+- ✅ Dark mode support via PicoCSS
+- ✅ Responsive design for all screen sizes
+
 ### Progressive Web App
 - ✅ Install on any device (desktop or mobile)
 - ✅ Offline access to cached tasks
@@ -68,7 +74,7 @@ AT Todo uses the AT Protocol's repository system to store tasks as records. Each
 - **Status** - Whether the task is completed or not
 - **Timestamps** - When the task was created and completed
 
-All tasks are stored in your personal AT Protocol repository under the `app.attodo.task` lexicon.
+All tasks are stored in your personal AT Protocol repository under the `app.attodo.task` lexicon. Lists are stored under `app.attodo.list`, and your preferences are stored under `app.attodo.settings`. See the [lexicon definitions](https://github.com/shindakun/attodo/tree/main/lexicons) for full schema details.
 
 ## Using Tags
 
@@ -105,7 +111,6 @@ AT Todo offers two tiers to support the community:
   - Help cover server costs
   - Help keep it free for everyone
   - Our eternal gratitude
-- **Status**: Coming soon! We're working on setting up supporter subscriptions.
 
 We believe in keeping AT Todo accessible to everyone while giving those who want to support the project a way to do so.
 
