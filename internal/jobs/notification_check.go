@@ -220,12 +220,19 @@ func (j *NotificationCheckJob) sendOverdueNotification(did string, tasks []*mode
 	log.Printf("[NotificationCheck] Sent overdue notification to %d/%d subscriptions", successCount, len(subs))
 
 	// Record notification history for each task
+	// Mark as "sent" if at least one subscription succeeded
 	for _, task := range tasks {
 		status := "sent"
 		var errMsg string
-		if len(errors) > 0 {
+		if successCount == 0 {
+			// Only mark as failed if ALL subscriptions failed
 			status = "failed"
-			errMsg = fmt.Sprintf("%v", errors[0])
+			if len(errors) > 0 {
+				errMsg = fmt.Sprintf("%v", errors[0])
+			}
+		} else if len(errors) > 0 {
+			// Partial success - note the errors but mark as sent
+			errMsg = fmt.Sprintf("Sent to %d/%d subscriptions. Errors: %v", successCount, len(subs), errors[0])
 		}
 
 		history := &models.NotificationHistory{
@@ -240,8 +247,12 @@ func (j *NotificationCheckJob) sendOverdueNotification(did string, tasks []*mode
 		}
 	}
 
+	if successCount == 0 {
+		// Only return error if ALL subscriptions failed
+		return fmt.Errorf("failed to send to all subscriptions: %v", errors)
+	}
 	if len(errors) > 0 {
-		return fmt.Errorf("failed to send to some subscriptions: %v", errors)
+		log.Printf("[NotificationCheck] Partial success: %d/%d subscriptions succeeded", successCount, len(subs))
 	}
 	return nil
 }
@@ -267,12 +278,19 @@ func (j *NotificationCheckJob) sendDueTodayNotification(did string, tasks []*mod
 	log.Printf("[NotificationCheck] Sent due today notification to %d/%d subscriptions", successCount, len(subs))
 
 	// Record notification history
+	// Mark as "sent" if at least one subscription succeeded
 	for _, task := range tasks {
 		status := "sent"
 		var errMsg string
-		if len(errors) > 0 {
+		if successCount == 0 {
+			// Only mark as failed if ALL subscriptions failed
 			status = "failed"
-			errMsg = fmt.Sprintf("%v", errors[0])
+			if len(errors) > 0 {
+				errMsg = fmt.Sprintf("%v", errors[0])
+			}
+		} else if len(errors) > 0 {
+			// Partial success - note the errors but mark as sent
+			errMsg = fmt.Sprintf("Sent to %d/%d subscriptions. Errors: %v", successCount, len(subs), errors[0])
 		}
 
 		history := &models.NotificationHistory{
@@ -287,8 +305,12 @@ func (j *NotificationCheckJob) sendDueTodayNotification(did string, tasks []*mod
 		}
 	}
 
+	if successCount == 0 {
+		// Only return error if ALL subscriptions failed
+		return fmt.Errorf("failed to send to all subscriptions: %v", errors)
+	}
 	if len(errors) > 0 {
-		return fmt.Errorf("failed to send to some subscriptions: %v", errors)
+		log.Printf("[NotificationCheck] Partial success: %d/%d subscriptions succeeded", successCount, len(subs))
 	}
 	return nil
 }
@@ -314,12 +336,19 @@ func (j *NotificationCheckJob) sendDueSoonNotification(did string, tasks []*mode
 	log.Printf("[NotificationCheck] Sent due soon notification to %d/%d subscriptions", successCount, len(subs))
 
 	// Record notification history
+	// Mark as "sent" if at least one subscription succeeded
 	for _, task := range tasks {
 		status := "sent"
 		var errMsg string
-		if len(errors) > 0 {
+		if successCount == 0 {
+			// Only mark as failed if ALL subscriptions failed
 			status = "failed"
-			errMsg = fmt.Sprintf("%v", errors[0])
+			if len(errors) > 0 {
+				errMsg = fmt.Sprintf("%v", errors[0])
+			}
+		} else if len(errors) > 0 {
+			// Partial success - note the errors but mark as sent
+			errMsg = fmt.Sprintf("Sent to %d/%d subscriptions. Errors: %v", successCount, len(subs), errors[0])
 		}
 
 		history := &models.NotificationHistory{
@@ -334,8 +363,12 @@ func (j *NotificationCheckJob) sendDueSoonNotification(did string, tasks []*mode
 		}
 	}
 
+	if successCount == 0 {
+		// Only return error if ALL subscriptions failed
+		return fmt.Errorf("failed to send to all subscriptions: %v", errors)
+	}
 	if len(errors) > 0 {
-		return fmt.Errorf("failed to send to some subscriptions: %v", errors)
+		log.Printf("[NotificationCheck] Partial success: %d/%d subscriptions succeeded", successCount, len(subs))
 	}
 	return nil
 }

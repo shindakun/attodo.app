@@ -7,11 +7,19 @@
             <strong>Browser Notifications:</strong>
             <span id="notification-permission-status">Checking...</span>
         </p>
+        <div id="registered-devices" style="display: none; margin-top: 1rem;">
+            <p><strong>Registered Devices:</strong></p>
+            <ul id="device-list" style="font-size: 0.9rem; color: var(--pico-muted-color);"></ul>
+        </div>
     </div>
 
     <div id="notification-controls">
         <button id="enable-notifications" style="display: none;">
             Enable Push Notifications
+        </button>
+
+        <button id="register-device" style="display: none;" class="secondary">
+            Register This Device
         </button>
 
         <div id="notification-preferences" style="display: none;">
@@ -134,6 +142,7 @@ async function initNotificationSettings() {
     const permission = Notification.permission;
     const statusEl = document.getElementById('notification-permission-status');
     const enableBtn = document.getElementById('enable-notifications');
+    const registerBtn = document.getElementById('register-device');
     const prefsEl = document.getElementById('notification-preferences');
 
     // Load settings from AT Protocol
@@ -143,15 +152,47 @@ async function initNotificationSettings() {
         statusEl.textContent = 'Enabled ✓';
         statusEl.style.color = 'var(--pico-primary)';
         prefsEl.style.display = 'block';
+        registerBtn.style.display = 'inline-block';
 
         // Ensure we have a push subscription (idempotent)
         await subscribeToPush();
+
+        // Load and display registered devices
+        await loadRegisteredDevices();
     } else if (permission === 'denied') {
         statusEl.textContent = 'Blocked (check browser settings)';
         statusEl.style.color = 'var(--pico-del-color)';
     } else {
         statusEl.textContent = 'Not enabled';
         enableBtn.style.display = 'block';
+    }
+}
+
+async function loadRegisteredDevices() {
+    try {
+        const response = await fetch('/app/push/subscriptions');
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const subscriptions = data.subscriptions || [];
+
+        if (subscriptions.length > 0) {
+            const deviceList = document.getElementById('device-list');
+            const devicesContainer = document.getElementById('registered-devices');
+
+            deviceList.innerHTML = '';
+            subscriptions.forEach((sub, index) => {
+                const li = document.createElement('li');
+                const userAgent = sub.userAgent || 'Unknown device';
+                const createdAt = new Date(sub.createdAt).toLocaleDateString();
+                li.textContent = `Device ${index + 1}: ${userAgent.substring(0, 50)}... (added ${createdAt})`;
+                deviceList.appendChild(li);
+            });
+
+            devicesContainer.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Failed to load registered devices:', error);
     }
 }
 
@@ -458,5 +499,17 @@ document.addEventListener('DOMContentLoaded', initNotificationSettings);
 
 // Add event listener for enable button
 document.getElementById('enable-notifications')?.addEventListener('click', requestNotificationPermission);
+
+// Add event listener for register device button
+document.getElementById('register-device')?.addEventListener('click', async () => {
+    try {
+        await subscribeToPush();
+        await loadRegisteredDevices();
+        showToast('Device registration refreshed!', 'success');
+    } catch (error) {
+        console.error('Failed to register device:', error);
+        showToast('Failed to register device', 'error');
+    }
+});
 </script>
 {{end}}
