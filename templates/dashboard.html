@@ -858,6 +858,7 @@
                 <li><a href="/docs">Docs</a></li>
                 <li><a href="#" onclick="showSettings(); return false;">Settings</a></li>
                 <li><a href="/logout">Logout</a></li>
+                <li id="supporter-badge" style="display: none;" title="Supporter">⭐</li>
             </ul>
         </nav>
     </header>
@@ -1002,6 +1003,7 @@
                     <h2>Settings</h2>
                 </header>
                 {{template "notification-settings.html"}}
+                {{template "supporter-settings"}}
             </article>
         </dialog>
     </main>

@@ -1,0 +1,158 @@
+{{define "supporter-settings"}}
+<script>
+let supporterStatus = {
+    isSupporter: false,
+    loading: true
+};
+
+// Load supporter status on page load
+async function loadSupporterStatus() {
+    try {
+        const response = await fetch('/supporter/status', {
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            supporterStatus = {
+                isSupporter: data.isSupporter,
+                loading: false
+            };
+
+            updateSupporterUI();
+        } else {
+            supporterStatus.loading = false;
+            updateSupporterUI();
+        }
+    } catch (error) {
+        console.error('Failed to load supporter status:', error);
+        supporterStatus.loading = false;
+        updateSupporterUI();
+    }
+}
+
+// Update UI based on supporter status
+function updateSupporterUI() {
+    // Update badge in header
+    const badge = document.getElementById('supporter-badge');
+    if (badge) {
+        badge.style.display = supporterStatus.isSupporter ? 'inline' : 'none';
+    }
+
+    // Update settings panel
+    const activeSection = document.getElementById('supporter-active');
+    const inactiveSection = document.getElementById('supporter-inactive');
+
+    if (activeSection && inactiveSection) {
+        if (supporterStatus.loading) {
+            activeSection.style.display = 'none';
+            inactiveSection.style.display = 'none';
+        } else if (supporterStatus.isSupporter) {
+            activeSection.style.display = 'block';
+            inactiveSection.style.display = 'none';
+        } else {
+            activeSection.style.display = 'none';
+            inactiveSection.style.display = 'block';
+        }
+    }
+}
+
+// Start checkout flow
+async function startCheckout() {
+    try {
+        const response = await fetch('/supporter/checkout', {
+            method: 'GET',
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            // Redirect to Stripe checkout
+            window.location.href = data.url;
+        } else {
+            const error = await response.text();
+            showToast('Failed to start checkout: ' + error, 'error');
+        }
+    } catch (error) {
+        console.error('Checkout error:', error);
+        showToast('An error occurred. Please try again.', 'error');
+    }
+}
+
+// Open customer portal
+async function openPortal() {
+    try {
+        const response = await fetch('/supporter/portal', {
+            method: 'GET',
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            // Redirect to Stripe customer portal
+            window.location.href = data.url;
+        } else {
+            const error = await response.text();
+            showToast('Failed to open portal: ' + error, 'error');
+        }
+    } catch (error) {
+        console.error('Portal error:', error);
+        showToast('An error occurred. Please try again.', 'error');
+    }
+}
+
+// Handle success/cancelled redirects
+function handleSupporterRedirect() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('supporter') === 'success') {
+        showToast('Thank you for becoming a supporter! 🎉', 'success');
+        // Reload status after a short delay
+        setTimeout(() => {
+            loadSupporterStatus();
+            // Clear the URL parameter
+            const newUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+        }, 2000);
+    } else if (urlParams.get('supporter') === 'cancelled') {
+        showToast('Checkout cancelled. You can become a supporter anytime!', 'info');
+        // Clear the URL parameter
+        const newUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadSupporterStatus();
+    handleSupporterRedirect();
+});
+</script>
+
+<!-- Supporter Settings Section -->
+<div id="supporter-settings" style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--pico-muted-border-color);">
+    <h3>Supporter Status</h3>
+
+    <!-- Not a supporter -->
+    <div id="supporter-inactive" style="display: none;">
+        <p>Support AT Todo development and get a gold star badge!</p>
+        <ul>
+            <li>⭐ Gold star in the UI</li>
+            <li>💙 Support development</li>
+            <li>💙 Help cover server costs</li>
+            <li>💙 Help keep it free for everyone</li>
+        </ul>
+        <button onclick="startCheckout()" class="secondary">
+            Become a Supporter ($24/year)
+        </button>
+    </div>
+
+    <!-- Active supporter -->
+    <div id="supporter-active" style="display: none;">
+        <p style="font-size: 1.2rem; margin-bottom: 1rem;">✨ Thank you for being a supporter! ✨</p>
+        <p>Your subscription helps keep AT Todo free for everyone.</p>
+        <button onclick="openPortal()" class="secondary" style="margin-top: 1rem;">
+            Manage Subscription
+        </button>
+    </div>
+</div>
+{{end}}

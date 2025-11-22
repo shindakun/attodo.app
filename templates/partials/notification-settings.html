@@ -143,6 +143,9 @@ async function initNotificationSettings() {
         statusEl.textContent = 'Enabled ✓';
         statusEl.style.color = 'var(--pico-primary)';
         prefsEl.style.display = 'block';
+
+        // Ensure we have a push subscription (idempotent)
+        await subscribeToPush();
     } else if (permission === 'denied') {
         statusEl.textContent = 'Blocked (check browser settings)';
         statusEl.style.color = 'var(--pico-del-color)';
@@ -191,6 +194,9 @@ async function requestNotificationPermission() {
             } catch (error) {
                 console.error('Failed to save initial settings:', error);
             }
+
+            // Subscribe to push notifications
+            await subscribeToPush();
 
             // Register periodic sync for background notifications
             await registerPeriodicSync();
@@ -286,35 +292,110 @@ async function testNotification() {
     }
 
     try {
-        if (!('serviceWorker' in navigator)) {
-            showToast('Service workers not supported', 'error');
-            return;
-        }
-
-        const registration = await navigator.serviceWorker.ready;
-        if (!registration) {
-            showToast('Service worker not registered', 'error');
-            return;
-        }
-
-        await registration.showNotification('AT Todo Test', {
-            body: 'Notifications are working!',
-            icon: '/static/icon-192.png',
-            badge: '/static/icon-192.png',
-            tag: 'test',
-            requireInteraction: false
+        // Call backend to send real push notification
+        const response = await fetch('/app/push/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
 
-        // Close the settings modal so user can see the notification
-        if (typeof closeSettings === 'function') {
-            closeSettings();
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to send test notification');
         }
 
-        showToast('Test notification sent!', 'success');
+        const result = await response.json();
+
+        if (result.success) {
+            showToast(`Test notification sent to ${result.sent} device(s)!`, 'success');
+
+            // Close the settings modal so user can see the notification
+            if (typeof closeSettings === 'function') {
+                closeSettings();
+            }
+        } else {
+            showToast('Failed to send test notification', 'error');
+        }
     } catch (error) {
         console.error('Test notification error:', error);
         showToast('Error: ' + error.message, 'error');
     }
+}
+
+// Subscribe to push notifications
+async function subscribeToPush() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.warn('Push notifications not supported');
+        return;
+    }
+
+    try {
+        console.log('[Push] Waiting for service worker to be ready...');
+        const registration = await navigator.serviceWorker.ready;
+        console.log('[Push] Service worker ready');
+
+        // Check if already subscribed
+        let subscription = await registration.pushManager.getSubscription();
+        console.log('[Push] Existing subscription:', subscription ? 'found' : 'not found');
+
+        if (!subscription) {
+            // Get VAPID public key from server
+            console.log('[Push] Fetching VAPID public key...');
+            const response = await fetch('/app/push/vapid-key');
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to get VAPID public key: ${response.status} ${errorText}`);
+            }
+            const { publicKey } = await response.json();
+            console.log('[Push] Got VAPID public key:', publicKey.substring(0, 20) + '...');
+
+            // Subscribe to push notifications
+            console.log('[Push] Subscribing to push manager...');
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(publicKey)
+            });
+            console.log('[Push] Push manager subscription created');
+        }
+
+        // Send subscription to backend
+        console.log('[Push] Registering subscription with backend...');
+        const subscribeResponse = await fetch('/app/push/subscribe', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(subscription.toJSON())
+        });
+
+        if (!subscribeResponse.ok) {
+            const errorText = await subscribeResponse.text();
+            throw new Error(`Failed to register push subscription: ${subscribeResponse.status} ${errorText}`);
+        }
+
+        console.log('[Push] Subscription registered successfully');
+    } catch (error) {
+        console.error('[Push] Failed to subscribe:', error);
+        // Don't show toast on page load - only when user explicitly enables
+        // showToast('Failed to set up push notifications', 'error');
+    }
+}
+
+// Convert base64 VAPID key to Uint8Array
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
 }
 
 // Register periodic background sync for notifications

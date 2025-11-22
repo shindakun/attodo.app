@@ -7,30 +7,38 @@ import (
 )
 
 type Config struct {
-	Port              string
-	BaseURL           string
-	ClientName        string
-	Environment       string
-	DBPath            string
-	MigrationsDir     string
-	VAPIDPublicKey    string
-	VAPIDPrivateKey   string
-	VAPIDSubscriber   string
+	Port                 string
+	BaseURL              string
+	ClientName           string
+	Environment          string
+	DBPath               string
+	MigrationsDir        string
+	VAPIDPublicKey       string
+	VAPIDPrivateKey      string
+	VAPIDSubscriber      string
+	StripeSecretKey      string
+	StripePublishableKey string
+	StripeWebhookSecret  string
+	StripePriceID        string
 }
 
 func Load() (*Config, error) {
 	godotenv.Load() // Load .env file if exists
 
 	cfg := &Config{
-		Port:            getEnv("PORT", "8181"),
-		BaseURL:         getEnv("BASE_URL", "http://localhost:8181"),
-		ClientName:      getEnv("CLIENT_NAME", "AT Todo App"),
-		Environment:     getEnv("ENVIRONMENT", "production"),
-		DBPath:          getEnv("DB_PATH", "./data/app.db"),
-		MigrationsDir:   getEnv("MIGRATIONS_DIR", "./migrations"),
-		VAPIDPublicKey:  getEnv("VAPID_PUBLIC_KEY", ""),
-		VAPIDPrivateKey: getEnv("VAPID_PRIVATE_KEY", ""),
-		VAPIDSubscriber: getEnv("VAPID_SUBSCRIBER", "mailto:admin@attodo.app"),
+		Port:                 getEnv("PORT", "8181"),
+		BaseURL:              getEnv("BASE_URL", "http://localhost:8181"),
+		ClientName:           getEnv("CLIENT_NAME", "AT Todo App"),
+		Environment:          getEnv("ENVIRONMENT", "production"),
+		DBPath:               getEnv("DB_PATH", "./data/app.db"),
+		MigrationsDir:        getEnv("MIGRATIONS_DIR", "./migrations"),
+		VAPIDPublicKey:       getEnv("VAPID_PUBLIC_KEY", ""),
+		VAPIDPrivateKey:      getEnv("VAPID_PRIVATE_KEY", ""),
+		VAPIDSubscriber:      getEnv("VAPID_SUBSCRIBER", "mailto:admin@attodo.app"),
+		StripeSecretKey:      getEnv("STRIPE_SECRET_KEY", ""),
+		StripePublishableKey: getEnv("STRIPE_PUBLISHABLE_KEY", ""),
+		StripeWebhookSecret:  getEnv("STRIPE_WEBHOOK_SECRET", ""),
+		StripePriceID:        getEnv("STRIPE_PRICE_ID", ""),
 	}
 
 	return cfg, nil
