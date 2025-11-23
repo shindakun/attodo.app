@@ -658,6 +658,42 @@
                     }
                 }
             }
+
+            // Set up frequency change handler for edit form
+            const editFrequencySelect = document.getElementById('frequency-edit-' + rkey);
+            if (editFrequencySelect) {
+                editFrequencySelect.addEventListener('change', function() {
+                    updateEditRecurringUI(rkey);
+                });
+            }
+        }
+
+        function updateEditRecurringUI(rkey) {
+            const frequencySelect = document.getElementById('frequency-edit-' + rkey);
+            const daysOfWeekSelector = document.getElementById('days-of-week-selector-edit-' + rkey);
+            const intervalUnit = document.getElementById('interval-unit-edit-' + rkey);
+
+            if (frequencySelect && intervalUnit) {
+                const freq = frequencySelect.value;
+
+                // Update interval unit text
+                const units = {
+                    'daily': 'day(s)',
+                    'weekly': 'week(s)',
+                    'monthly': 'month(s)',
+                    'yearly': 'year(s)'
+                };
+                intervalUnit.textContent = units[freq] || 'week(s)';
+
+                // Show/hide days of week selector
+                if (daysOfWeekSelector) {
+                    if (freq === 'weekly') {
+                        daysOfWeekSelector.style.display = 'block';
+                    } else {
+                        daysOfWeekSelector.style.display = 'none';
+                    }
+                }
+            }
         }
 
         function cancelEdit(rkey) {
@@ -666,6 +702,66 @@
             taskItem.querySelector('.task-edit').style.display = 'none';
             taskItem.querySelector('.task-actions').style.display = 'flex';
         }
+
+        function toggleRecurringOptions() {
+            const checkbox = document.getElementById('isRecurring');
+            const options = document.getElementById('recurring-options');
+            options.style.display = checkbox.checked ? 'block' : 'none';
+        }
+
+        // Validate recurring task form submission
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('form[hx-post="/app/tasks"]');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    const isRecurring = document.getElementById('isRecurring');
+                    const dueDateInput = document.getElementById('dueDate');
+
+                    if (isRecurring && isRecurring.checked) {
+                        if (!dueDateInput || !dueDateInput.value) {
+                            e.preventDefault();
+                            showToast('Recurring tasks require a due date. Please set a due date before creating a recurring task.', 'error', 5000);
+                            return false;
+                        }
+                    }
+                });
+            }
+        });
+
+        function toggleEditRecurringOptions(rkey) {
+            const checkbox = document.getElementById('isRecurring-edit-' + rkey);
+            const options = document.getElementById('recurring-options-edit-' + rkey);
+            options.style.display = checkbox.checked ? 'block' : 'none';
+        }
+
+        // Update recurring UI based on frequency selection
+        document.addEventListener('DOMContentLoaded', function() {
+            const frequencySelect = document.getElementById('frequency');
+            const daysOfWeekSelector = document.getElementById('days-of-week-selector');
+            const intervalUnit = document.getElementById('interval-unit');
+
+            if (frequencySelect) {
+                frequencySelect.addEventListener('change', function() {
+                    const freq = this.value;
+
+                    // Update interval unit text
+                    const units = {
+                        'daily': 'day(s)',
+                        'weekly': 'week(s)',
+                        'monthly': 'month(s)',
+                        'yearly': 'year(s)'
+                    };
+                    intervalUnit.textContent = units[freq] || 'week(s)';
+
+                    // Show/hide days of week selector
+                    if (freq === 'weekly') {
+                        daysOfWeekSelector.style.display = 'block';
+                    } else {
+                        daysOfWeekSelector.style.display = 'none';
+                    }
+                });
+            }
+        });
 
         function startListEdit(rkey) {
             const listItem = document.getElementById('list-' + rkey);
@@ -1001,7 +1097,67 @@
                     </div>
                     <small style="display: block; margin-top: -0.5rem; margin-bottom: 0.5rem;">Or type date/time in title (e.g., "tomorrow at 3pm" or "11/26 3:30pm meeting")</small>
 
-                    <button type="submit">Add Task</button>
+                    <label>
+                        <input type="checkbox" name="isRecurring" id="isRecurring" onchange="toggleRecurringOptions()">
+                        Make this a recurring task 🔄
+                    </label>
+
+                    <div id="recurring-options" style="display: none; padding: 1rem; background-color: var(--pico-card-sectioning-background-color); border-radius: var(--pico-border-radius); margin-top: 0.5rem;">
+                        <div style="padding: 0.5rem; background-color: var(--pico-primary-background); border-left: 3px solid var(--pico-primary); margin-bottom: 1rem;">
+                            <small style="color: var(--pico-primary);">
+                                ⚠️ <strong>Recurring tasks require a due date</strong> to calculate the next occurrence. Please set a due date above.
+                            </small>
+                        </div>
+
+                        <label for="frequency">
+                            Repeats
+                            <select name="frequency" id="frequency">
+                                <option value="daily">Daily</option>
+                                <option value="weekly" selected>Weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="yearly">Yearly</option>
+                            </select>
+                        </label>
+
+                        <label for="interval">
+                            Every
+                            <input type="number" name="interval" id="interval" value="1" min="1" max="30" style="width: 80px; display: inline-block;">
+                            <span id="interval-unit">week(s)</span>
+                        </label>
+
+                        <div id="days-of-week-selector" style="margin-top: 0.5rem;">
+                            <small>On these days:</small>
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.25rem;">
+                                <label style="display: inline-flex; align-items: center; margin: 0;">
+                                    <input type="checkbox" name="daysOfWeek" value="1" style="margin: 0 0.25rem 0 0;"> Mon
+                                </label>
+                                <label style="display: inline-flex; align-items: center; margin: 0;">
+                                    <input type="checkbox" name="daysOfWeek" value="2" style="margin: 0 0.25rem 0 0;"> Tue
+                                </label>
+                                <label style="display: inline-flex; align-items: center; margin: 0;">
+                                    <input type="checkbox" name="daysOfWeek" value="3" style="margin: 0 0.25rem 0 0;"> Wed
+                                </label>
+                                <label style="display: inline-flex; align-items: center; margin: 0;">
+                                    <input type="checkbox" name="daysOfWeek" value="4" style="margin: 0 0.25rem 0 0;"> Thu
+                                </label>
+                                <label style="display: inline-flex; align-items: center; margin: 0;">
+                                    <input type="checkbox" name="daysOfWeek" value="5" style="margin: 0 0.25rem 0 0;"> Fri
+                                </label>
+                                <label style="display: inline-flex; align-items: center; margin: 0;">
+                                    <input type="checkbox" name="daysOfWeek" value="6" style="margin: 0 0.25rem 0 0;"> Sat
+                                </label>
+                                <label style="display: inline-flex; align-items: center; margin: 0;">
+                                    <input type="checkbox" name="daysOfWeek" value="0" style="margin: 0 0.25rem 0 0;"> Sun
+                                </label>
+                            </div>
+                        </div>
+
+                        <small style="display: block; margin-top: 0.5rem; color: var(--pico-muted-color);">
+                            💡 When you complete a recurring task, a new one will be automatically created with the next due date.
+                        </small>
+                    </div>
+
+                    <button type="submit" id="submit-task-button">Add Task</button>
                 </form>
                 </div>
             </article>

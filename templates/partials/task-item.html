@@ -1,7 +1,12 @@
 {{define "task-item.html"}}
 <div class="task-item {{if .Completed}}completed{{end}}" id="task-{{.RKey}}">
     <div class="task-view">
-        <h4>{{.Title}}</h4>
+        <h4>
+            {{.Title}}
+            {{if .IsRecurring}}
+            <span style="display: inline-block; padding: 0.125rem 0.5rem; background-color: var(--pico-primary-background); color: var(--pico-primary); border: 1px solid var(--pico-primary); border-radius: 12px; font-size: 0.75rem; font-weight: 500; margin-left: 0.5rem;" title="This task recurs automatically">🔄 Recurring</span>
+            {{end}}
+        </h4>
         {{if .Description}}
         <p>{{.Description}}</p>
         {{end}}
@@ -79,6 +84,74 @@
                 </label>
             </div>
             <small style="display: block; margin-top: -0.5rem; margin-bottom: 0.5rem;">Or type date/time in title (e.g., "tomorrow at 3pm" or "11/26 3:30pm meeting")</small>
+
+            {{if .IsRecurring}}
+            <div style="padding: 0.75rem; background-color: var(--pico-card-sectioning-background-color); border-radius: var(--pico-border-radius); margin-top: 0.5rem;">
+                <small style="color: var(--pico-muted-color);">
+                    ℹ️ This is a recurring task. To change the recurrence pattern, delete this task and create a new one.
+                </small>
+            </div>
+            {{else}}
+            <label>
+                <input type="checkbox" name="isRecurring" id="isRecurring-edit-{{.RKey}}" onchange="toggleEditRecurringOptions('{{.RKey}}')">
+                Make this a recurring task 🔄
+            </label>
+
+            <div id="recurring-options-edit-{{.RKey}}" style="display: none; padding: 1rem; background-color: var(--pico-card-sectioning-background-color); border-radius: var(--pico-border-radius); margin-top: 0.5rem;">
+                <div style="padding: 0.5rem; background-color: var(--pico-primary-background); border-left: 3px solid var(--pico-primary); margin-bottom: 1rem;">
+                    <small style="color: var(--pico-primary);">
+                        ⚠️ <strong>Recurring tasks require a due date</strong> to calculate the next occurrence. Please set a due date above.
+                    </small>
+                </div>
+
+                <label for="frequency-edit-{{.RKey}}">
+                    Repeats
+                    <select name="frequency" id="frequency-edit-{{.RKey}}">
+                        <option value="daily">Daily</option>
+                        <option value="weekly" selected>Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+                </label>
+
+                <label for="interval-edit-{{.RKey}}">
+                    Every
+                    <input type="number" name="interval" id="interval-edit-{{.RKey}}" value="1" min="1" max="30" style="width: 80px; display: inline-block;">
+                    <span id="interval-unit-edit-{{.RKey}}">week(s)</span>
+                </label>
+
+                <div id="days-of-week-selector-edit-{{.RKey}}" style="margin-top: 0.5rem;">
+                    <small>On these days:</small>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.25rem;">
+                        <label style="display: inline-flex; align-items: center; margin: 0;">
+                            <input type="checkbox" name="daysOfWeek" value="1" style="margin: 0 0.25rem 0 0;"> Mon
+                        </label>
+                        <label style="display: inline-flex; align-items: center; margin: 0;">
+                            <input type="checkbox" name="daysOfWeek" value="2" style="margin: 0 0.25rem 0 0;"> Tue
+                        </label>
+                        <label style="display: inline-flex; align-items: center; margin: 0;">
+                            <input type="checkbox" name="daysOfWeek" value="3" style="margin: 0 0.25rem 0 0;"> Wed
+                        </label>
+                        <label style="display: inline-flex; align-items: center; margin: 0;">
+                            <input type="checkbox" name="daysOfWeek" value="4" style="margin: 0 0.25rem 0 0;"> Thu
+                        </label>
+                        <label style="display: inline-flex; align-items: center; margin: 0;">
+                            <input type="checkbox" name="daysOfWeek" value="5" style="margin: 0 0.25rem 0 0;"> Fri
+                        </label>
+                        <label style="display: inline-flex; align-items: center; margin: 0;">
+                            <input type="checkbox" name="daysOfWeek" value="6" style="margin: 0 0.25rem 0 0;"> Sat
+                        </label>
+                        <label style="display: inline-flex; align-items: center; margin: 0;">
+                            <input type="checkbox" name="daysOfWeek" value="0" style="margin: 0 0.25rem 0 0;"> Sun
+                        </label>
+                    </div>
+                </div>
+
+                <small style="display: block; margin-top: 0.5rem; color: var(--pico-muted-color);">
+                    💡 When you complete this recurring task, a new one will be automatically created with the next due date.
+                </small>
+            </div>
+            {{end}}
 
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
                 <button type="submit">Save</button>

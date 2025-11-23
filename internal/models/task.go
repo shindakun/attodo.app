@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Task represents a todo item stored in AT Protocol
 type Task struct {
@@ -12,12 +15,59 @@ type Task struct {
 	DueDate     *time.Time `json:"dueDate,omitempty"`     // Due date for the task
 	Tags        []string   `json:"tags,omitempty"`        // User-defined tags for categorization
 
+	// Recurring task fields - stored directly in AT Protocol
+	IsRecurring   bool   `json:"isRecurring,omitempty"`   // Whether this task recurs
+	RecFrequency  string `json:"recFrequency,omitempty"`  // daily, weekly, monthly, yearly
+	RecInterval   int    `json:"recInterval,omitempty"`   // Every N units (default 1)
+	RecDaysOfWeek []int  `json:"recDaysOfWeek,omitempty"` // For weekly: [0-6] where 0=Sunday
+
 	// Metadata from AT Protocol (populated after creation)
 	RKey string `json:"-"` // Record key (extracted from URI)
 	URI  string `json:"-"` // Full AT URI
 
 	// Transient field - populated when fetching task with list memberships
 	Lists []*TaskList `json:"-"` // Lists this task belongs to (not stored in AT Protocol)
+}
+
+// RecurringTask represents the recurrence pattern for a task
+type RecurringTask struct {
+	ID      int64  `json:"id"`
+	DID     string `json:"did"`
+	TaskURI string `json:"taskUri"` // AT URI of the recurring task template
+
+	// Recurrence pattern
+	Frequency    string `json:"frequency"`              // daily, weekly, monthly, yearly
+	Interval     int    `json:"interval"`               // Every N units (e.g., every 2 weeks)
+	DaysOfWeek   []int  `json:"daysOfWeek,omitempty"`   // For weekly: [0,1,2,3,4,5,6] where 0=Sunday
+	DayOfMonth   int    `json:"dayOfMonth,omitempty"`   // For monthly: 1-31
+	EndDate      *time.Time `json:"endDate,omitempty"`  // Stop generating after this date
+	MaxOccurrences int   `json:"maxOccurrences,omitempty"` // Stop after N occurrences
+
+	// Tracking
+	OccurrenceCount  int        `json:"occurrenceCount"`
+	LastGeneratedAt  *time.Time `json:"lastGeneratedAt,omitempty"`
+	NextOccurrenceAt *time.Time `json:"nextOccurrenceAt,omitempty"`
+
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// DaysOfWeekJSON converts []int to JSON string for storage
+func (r *RecurringTask) DaysOfWeekJSON() string {
+	if len(r.DaysOfWeek) == 0 {
+		return ""
+	}
+	bytes, _ := json.Marshal(r.DaysOfWeek)
+	return string(bytes)
+}
+
+// SetDaysOfWeekFromJSON parses JSON string into []int
+func (r *RecurringTask) SetDaysOfWeekFromJSON(jsonStr string) error {
+	if jsonStr == "" {
+		r.DaysOfWeek = nil
+		return nil
+	}
+	return json.Unmarshal([]byte(jsonStr), &r.DaysOfWeek)
 }
 
 // TaskList represents a collection of tasks stored in AT Protocol

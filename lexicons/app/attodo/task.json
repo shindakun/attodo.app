@@ -47,6 +47,31 @@
             },
             "maxLength": 10,
             "description": "User-defined tags for categorization"
+          },
+          "isRecurring": {
+            "type": "boolean",
+            "description": "Whether this task automatically creates a new instance when completed"
+          },
+          "recFrequency": {
+            "type": "string",
+            "enum": ["daily", "weekly", "monthly", "yearly"],
+            "description": "How often the task recurs"
+          },
+          "recInterval": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365,
+            "description": "Recur every N frequency units (e.g. every 2 weeks)"
+          },
+          "recDaysOfWeek": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 6
+            },
+            "maxLength": 7,
+            "description": "For weekly recurrence: which days (0=Sunday, 6=Saturday)"
           }
         }
       }

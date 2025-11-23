@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -179,6 +180,25 @@ func parseTaskFields(record map[string]interface{}) models.Task {
 			}
 		}
 	}
+	// Parse recurring flag if present
+	if isRecurring, ok := record["isRecurring"].(bool); ok {
+		task.IsRecurring = isRecurring
+	}
+	// Parse recurring pattern fields
+	if recFrequency, ok := record["recFrequency"].(string); ok {
+		task.RecFrequency = recFrequency
+	}
+	if recInterval, ok := record["recInterval"].(float64); ok {
+		task.RecInterval = int(recInterval)
+	}
+	if recDaysOfWeek, ok := record["recDaysOfWeek"].([]interface{}); ok {
+		task.RecDaysOfWeek = make([]int, 0, len(recDaysOfWeek))
+		for _, day := range recDaysOfWeek {
+			if dayNum, ok := day.(float64); ok {
+				task.RecDaysOfWeek = append(task.RecDaysOfWeek, int(dayNum))
+			}
+		}
+	}
 
 	return task
 }
@@ -208,6 +228,20 @@ func buildTaskRecord(task *models.Task) map[string]interface{} {
 		record["tags"] = task.Tags
 	} else {
 		record["tags"] = []string{}
+	}
+
+	// Add recurring flag and pattern if set
+	if task.IsRecurring {
+		record["isRecurring"] = true
+		if task.RecFrequency != "" {
+			record["recFrequency"] = task.RecFrequency
+		}
+		if task.RecInterval > 0 {
+			record["recInterval"] = task.RecInterval
+		}
+		if len(task.RecDaysOfWeek) > 0 {
+			record["recDaysOfWeek"] = task.RecDaysOfWeek
+		}
 	}
 
 	return record
@@ -314,6 +348,50 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		record["tags"] = tags
 	}
 
+	// Check if this is a recurring task and parse pattern
+	isRecurring := r.FormValue("isRecurring") == "on"
+	var frequency string
+	var interval int
+	var daysOfWeek []int
+
+	if isRecurring {
+		// Validate that recurring tasks have a due date
+		if dueDate == nil {
+			http.Error(w, "Recurring tasks require a due date to calculate the next occurrence. Please set a due date.", http.StatusBadRequest)
+			return
+		}
+
+		record["isRecurring"] = true
+
+		frequency = r.FormValue("frequency")
+		if frequency == "" {
+			frequency = "weekly" // default
+		}
+		record["recFrequency"] = frequency
+
+		interval = 1
+		if intervalStr := r.FormValue("interval"); intervalStr != "" {
+			if parsedInterval, err := strconv.Atoi(intervalStr); err == nil && parsedInterval > 0 {
+				interval = parsedInterval
+			}
+		}
+		record["recInterval"] = interval
+
+		// Parse days of week for weekly tasks
+		if frequency == "weekly" {
+			if daysValues := r.Form["daysOfWeek"]; len(daysValues) > 0 {
+				for _, dayStr := range daysValues {
+					if day, err := strconv.Atoi(dayStr); err == nil {
+						daysOfWeek = append(daysOfWeek, day)
+					}
+				}
+				if len(daysOfWeek) > 0 {
+					record["recDaysOfWeek"] = daysOfWeek
+				}
+			}
+		}
+	}
+
 	// Try to create record with retry logic
 	var output *atproto.RepoCreateRecord_Output
 	var err error
@@ -334,14 +412,18 @@ func (h *TaskHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 
 	// Create task model for rendering
 	task := models.Task{
-		Title:       title,
-		Description: description,
-		Completed:   false,
-		CreatedAt:   nowUTC,
-		DueDate:     dueDate,
-		Tags:        tags,
-		RKey:        rkey,
-		URI:         output.Uri,
+		Title:         title,
+		Description:   description,
+		Completed:     false,
+		CreatedAt:     nowUTC,
+		DueDate:       dueDate,
+		Tags:          tags,
+		RKey:          rkey,
+		URI:           output.Uri,
+		IsRecurring:   isRecurring,
+		RecFrequency:  frequency,
+		RecInterval:   interval,
+		RecDaysOfWeek: daysOfWeek,
 	}
 
 	// Return HTMX response with new task partial
@@ -416,7 +498,16 @@ func (h *TaskHandler) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		h.client.UpdateSession(cookie.Value, sess)
 	}
 
-	log.Printf("Task updated: %s (completed: %v)", rkey, task.Completed)
+	log.Printf("Task updated: %s (completed: %v, isRecurring: %v)", rkey, task.Completed, task.IsRecurring)
+
+	// Handle recurring task completion - create next instance
+	if task.Completed && task.IsRecurring {
+		log.Printf("Attempting to create next recurring instance for task: %s", rkey)
+		if err := h.handleRecurringTaskCompletion(r.Context(), sess, task); err != nil {
+			log.Printf("Warning: Failed to create next recurring instance: %v", err)
+			// Don't fail the request - the task was still marked complete
+		}
+	}
 
 	// Return empty response to trigger deletion from current view
 	// The task will appear in the other tab when reloaded
@@ -512,6 +603,47 @@ func (h *TaskHandler) handleEditTask(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Check if converting to recurring task (only if not already recurring)
+	isRecurring := r.FormValue("isRecurring") == "on"
+	if isRecurring && !task.IsRecurring {
+		// Validate that recurring tasks have a due date
+		if task.DueDate == nil {
+			http.Error(w, "Recurring tasks require a due date to calculate the next occurrence. Please set a due date.", http.StatusBadRequest)
+			return
+		}
+
+		task.IsRecurring = true
+
+		// Parse and set the recurrence pattern
+		frequency := r.FormValue("frequency")
+		if frequency == "" {
+			frequency = "weekly" // default
+		}
+		task.RecFrequency = frequency
+
+		interval := 1
+		if intervalStr := r.FormValue("interval"); intervalStr != "" {
+			if parsedInterval, err := strconv.Atoi(intervalStr); err == nil && parsedInterval > 0 {
+				interval = parsedInterval
+			}
+		}
+		task.RecInterval = interval
+
+		// Parse days of week for weekly tasks
+		if frequency == "weekly" {
+			if daysValues := r.Form["daysOfWeek"]; len(daysValues) > 0 {
+				task.RecDaysOfWeek = make([]int, 0, len(daysValues))
+				for _, dayStr := range daysValues {
+					if day, err := strconv.Atoi(dayStr); err == nil {
+						task.RecDaysOfWeek = append(task.RecDaysOfWeek, day)
+					}
+				}
+			}
+		}
+
+		log.Printf("Converting task to recurring: frequency=%s, interval=%d, daysOfWeek=%v", frequency, interval, task.RecDaysOfWeek)
+	}
+
 	// Build the record for update
 	record := buildTaskRecord(task)
 
@@ -532,7 +664,7 @@ func (h *TaskHandler) handleEditTask(w http.ResponseWriter, r *http.Request) {
 		h.client.UpdateSession(cookie.Value, sess)
 	}
 
-	log.Printf("Task edited: %s", rkey)
+	log.Printf("Task edited: %s (isRecurring: %v)", rkey, task.IsRecurring)
 
 	// Return updated task partial for HTMX to swap
 	w.Header().Set("Content-Type", "text/html")
@@ -943,4 +1075,116 @@ func extractRKey(uri string) string {
 		return parts[len(parts)-1]
 	}
 	return ""
+}
+
+// handleRecurringTaskCompletion creates the next instance of a recurring task
+func (h *TaskHandler) handleRecurringTaskCompletion(ctx context.Context, sess *bskyoauth.Session, completedTask *models.Task) error {
+	// Verify the task has a recurrence pattern
+	if completedTask.RecFrequency == "" {
+		log.Printf("Task %s is marked recurring but has no frequency set", completedTask.URI)
+		return nil
+	}
+
+	// Verify the task has a due date (required for calculating next occurrence)
+	if completedTask.DueDate == nil {
+		log.Printf("Task %s is recurring but has no due date, cannot calculate next occurrence", completedTask.URI)
+		return nil
+	}
+
+	// Calculate next occurrence based on the task's recurrence pattern
+	nextDueDate := h.calculateNextDueDate(completedTask.DueDate, completedTask.RecFrequency, completedTask.RecInterval, completedTask.RecDaysOfWeek)
+	if nextDueDate == nil {
+		log.Printf("Could not calculate next due date for recurring task %s", completedTask.URI)
+		return nil
+	}
+
+	// Create a new task instance with the next due date
+	newTask := &models.Task{
+		Title:         completedTask.Title,
+		Description:   completedTask.Description,
+		Completed:     false,
+		CreatedAt:     time.Now().UTC(),
+		DueDate:       nextDueDate,
+		Tags:          completedTask.Tags,
+		IsRecurring:   true,
+		RecFrequency:  completedTask.RecFrequency,
+		RecInterval:   completedTask.RecInterval,
+		RecDaysOfWeek: completedTask.RecDaysOfWeek,
+	}
+
+	// Build the record
+	record := buildTaskRecord(newTask)
+
+	// Create the new task in AT Protocol
+	var output *atproto.RepoCreateRecord_Output
+	var err error
+	sess, err = h.withRetry(ctx, sess, func(s *bskyoauth.Session) error {
+		output, err = h.client.CreateRecord(ctx, s, TaskCollection, record)
+		return err
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to create next recurring instance: %w", err)
+	}
+
+	log.Printf("Created next recurring instance: %s (due: %v)", output.Uri, nextDueDate.Format(time.RFC3339))
+	return nil
+}
+
+// calculateNextDueDate calculates the next due date based on recurrence pattern
+func (h *TaskHandler) calculateNextDueDate(currentDue *time.Time, frequency string, interval int, daysOfWeek []int) *time.Time {
+	if interval < 1 {
+		interval = 1
+	}
+
+	baseDate := *currentDue
+
+	switch frequency {
+	case "daily":
+		next := baseDate.AddDate(0, 0, interval)
+		return &next
+
+	case "weekly":
+		if len(daysOfWeek) == 0 {
+			// If no specific days, just add interval weeks
+			next := baseDate.AddDate(0, 0, interval*7)
+			return &next
+		}
+
+		// Find next matching day
+		currentWeekday := int(baseDate.Weekday())
+		daysToAdd := 0
+
+		// First, try to find a day later in the current week
+		for _, day := range daysOfWeek {
+			if day > currentWeekday {
+				daysToAdd = day - currentWeekday
+				break
+			}
+		}
+
+		// If no day found in current week, move to next interval and use first day
+		if daysToAdd == 0 {
+			weeksToAdd := interval
+			daysIntoWeek := daysOfWeek[0]
+			daysToAdd = (weeksToAdd * 7) - currentWeekday + daysIntoWeek
+			if daysToAdd <= 0 {
+				daysToAdd += 7
+			}
+		}
+
+		next := baseDate.AddDate(0, 0, daysToAdd)
+		return &next
+
+	case "monthly":
+		next := baseDate.AddDate(0, interval, 0)
+		return &next
+
+	case "yearly":
+		next := baseDate.AddDate(interval, 0, 0)
+		return &next
+
+	default:
+		return nil
+	}
 }
