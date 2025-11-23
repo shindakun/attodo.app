@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -48,6 +49,8 @@ func main() {
 	listHandler := handlers.NewListHandler(authHandler.Client())
 	settingsHandler := handlers.NewSettingsHandler(authHandler.Client())
 	pushHandler := handlers.NewPushHandler(notificationRepo)
+	calendarHandler := handlers.NewCalendarHandler(authHandler.Client())
+	icalHandler := handlers.NewICalHandler(authHandler.Client())
 
 	// Initialize Stripe client and supporter handler (only if Stripe keys are configured)
 	var supporterHandler *handlers.SupporterHandler
@@ -64,22 +67,26 @@ func main() {
 
 	// Initialize push notification sender (only if VAPID keys are configured)
 	var pushSender *push.Sender
-	var jobRunner *jobs.Runner
+	var taskJobRunner *jobs.Runner
+	var calendarJobRunner *jobs.Runner
 	if cfg.VAPIDPublicKey != "" && cfg.VAPIDPrivateKey != "" {
 		pushSender = push.NewSender(cfg.VAPIDPublicKey, cfg.VAPIDPrivateKey, cfg.VAPIDSubscriber)
 		pushHandler.SetSender(pushSender)
 		log.Println("Push notification sender initialized")
 
-		// Initialize background job runner (check every 5 minutes)
-		jobRunner = jobs.NewRunner(5 * time.Minute)
-
-		// Create and register notification check job
+		// Initialize background job runner for task notifications (check every 5 minutes)
+		taskJobRunner = jobs.NewRunner(5 * time.Minute)
 		notificationJob := jobs.NewNotificationCheckJob(notificationRepo, authHandler.Client(), pushSender)
-		jobRunner.AddJob(notificationJob)
+		taskJobRunner.AddJob(notificationJob)
+		taskJobRunner.Start()
+		log.Println("Task notification job runner started (5 minute interval)")
 
-		// Start job runner
-		jobRunner.Start()
-		log.Println("Background job runner started")
+		// Initialize background job runner for calendar notifications (check every 30 minutes)
+		calendarJobRunner = jobs.NewRunner(30 * time.Minute)
+		calendarNotificationJob := jobs.NewCalendarNotificationJob(notificationRepo, authHandler.Client(), pushSender, settingsHandler)
+		calendarJobRunner.AddJob(calendarNotificationJob)
+		calendarJobRunner.Start()
+		log.Println("Calendar notification job runner started (30 minute interval)")
 	} else {
 		log.Println("VAPID keys not configured - push notifications disabled")
 		log.Println("Run 'go run ./cmd/vapid' to generate VAPID keys")
@@ -137,6 +144,12 @@ func main() {
 	mux.HandleFunc("/list/", listHandler.HandlePublicListView)
 	logRoute("GET /list/*")
 
+	// Public iCal feed routes
+	mux.HandleFunc("/calendar/feed/", icalHandler.GenerateCalendarFeed)
+	logRoute("GET /calendar/feed/{did}/events.ics")
+	mux.HandleFunc("/tasks/feed/", icalHandler.GenerateTasksFeed)
+	logRoute("GET /tasks/feed/{did}/tasks.ics")
+
 	// Protected routes
 	mux.Handle("/app", authMiddleware.RequireAuth(http.HandlerFunc(handleDashboard)))
 	logRoute("GET /app [protected]")
@@ -162,6 +175,23 @@ func main() {
 	logRoute("POST /app/push/test [protected]")
 	mux.Handle("/app/push/check", authMiddleware.RequireAuth(http.HandlerFunc(pushHandler.HandleCheckTasks)))
 	logRoute("POST /app/push/check [protected]")
+
+	// Calendar routes
+	mux.Handle("/app/calendar/events", authMiddleware.RequireAuth(http.HandlerFunc(calendarHandler.ListEvents)))
+	logRoute("GET /app/calendar/events [protected]")
+	mux.Handle("/app/calendar/upcoming", authMiddleware.RequireAuth(http.HandlerFunc(calendarHandler.ListUpcomingEvents)))
+	logRoute("GET /app/calendar/upcoming [protected]")
+	// Note: These must be after the specific routes above to avoid matching them
+	mux.Handle("/app/calendar/events/", authMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Route to either GetEvent or GetEventRSVPs based on URL
+		if strings.HasSuffix(r.URL.Path, "/rsvps") {
+			calendarHandler.GetEventRSVPs(w, r)
+		} else {
+			calendarHandler.GetEvent(w, r)
+		}
+	})))
+	logRoute("GET /app/calendar/events/:rkey [protected]")
+	logRoute("GET /app/calendar/events/:rkey/rsvps [protected]")
 
 	// Supporter routes (only if Stripe is configured)
 	if supporterHandler != nil {
@@ -213,8 +243,11 @@ func main() {
 	log.Println("Shutting down gracefully...")
 
 	// Stop background jobs
-	if jobRunner != nil {
-		jobRunner.Stop()
+	if taskJobRunner != nil {
+		taskJobRunner.Stop()
+	}
+	if calendarJobRunner != nil {
+		calendarJobRunner.Stop()
 	}
 
 	log.Println("Shutdown complete")

@@ -1,0 +1,71 @@
+{{define "calendar-event-card.html"}}
+<article class="event-card" data-event-uri="{{.URI}}">
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: start; gap: 0.5rem;">
+            <h4 style="margin: 0; flex: 1;">{{.Name}}</h4>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                {{if .HasKnownStatus}}
+                <span class="event-status-badge status-{{.Status}}">{{.FormatStatus}}</span>
+                {{end}}
+                {{if .SmokesignalURL}}
+                <a href="{{.SmokesignalURL}}" target="_blank" rel="noopener noreferrer" title="View on Smokesignal" style="display: inline-flex; align-items: center; text-decoration: none; font-size: 18px;">
+                    💨
+                </a>
+                {{end}}
+            </div>
+        </div>
+    </header>
+
+    {{if .Description}}
+    <p style="margin: 0.5rem 0; color: var(--pico-muted-color);">{{.TruncatedDescription 150}}</p>
+    {{end}}
+
+    <div class="event-meta">
+        {{if .StartsAt}}
+        <div class="event-time">
+            <strong>📅 Starts:</strong>
+            <time class="utc-time" datetime="{{.StartsAt.Format "2006-01-02T15:04:05Z07:00"}}">
+                {{.StartsAt.Format "2006-01-02T15:04:05Z07:00"}}
+            </time>
+        </div>
+        {{end}}
+
+        {{if .EndsAt}}
+        <div class="event-time">
+            <strong>🏁 Ends:</strong>
+            <time class="utc-time" datetime="{{.EndsAt.Format "2006-01-02T15:04:05Z07:00"}}">
+                {{.EndsAt.Format "2006-01-02T15:04:05Z07:00"}}
+            </time>
+        </div>
+        {{end}}
+
+        {{if .Mode}}
+        <div class="event-mode">
+            {{if eq .Mode "virtual"}}
+                <strong>💻 Mode:</strong> Virtual
+            {{else if eq .Mode "in-person"}}
+                <strong>📍 Mode:</strong> In Person
+            {{else if eq .Mode "hybrid"}}
+                <strong>🔄 Mode:</strong> Hybrid
+            {{end}}
+        </div>
+        {{end}}
+
+        {{if .Locations}}
+        <div class="event-locations">
+            <strong>📍 Location{{if gt (len .Locations) 1}}s{{end}}:</strong>
+            {{range $i, $loc := .Locations}}
+                {{if $i}}, {{end}}
+                {{if $loc.Name}}{{$loc.Name}}{{else if $loc.Address}}{{$loc.Address}}{{end}}
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+
+    <div class="event-actions" style="margin-top: 0.75rem;">
+        <button type="button" class="secondary" style="padding: 0.25rem 0.75rem; margin: 0;" onclick="viewEventDetails('{{.RKey}}')">
+            View Details
+        </button>
+    </div>
+</article>
+{{end}}
