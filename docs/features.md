@@ -649,62 +649,38 @@ Subscribe to your AT Protocol calendar events **and tasks** in Google Calendar, 
 
 **Getting your iCal feed URLs:**
 
-AT Todo provides two separate feeds:
-
-**Calendar Events Feed:**
-```
-https://attodo.app/calendar/feed/{your-did}/events.ics
-```
-
-**Tasks Feed (tasks with due dates):**
-```
-https://attodo.app/tasks/feed/{your-did}/tasks.ics
-```
-
-To find your DID:
-1. Open AT Todo and navigate to the 📅 Events tab
-2. Open your browser's developer console (F12)
-3. Your DID appears in the console when loading events, or
-4. Check your AT Protocol profile on Bluesky
+1. Open AT Todo and click **Settings** in the top navigation
+2. Scroll down to **Calendar Subscriptions**
+3. Copy the feed URLs you need:
+   - **📅 Calendar Events Feed** - All your AT Protocol events
+   - **✓ Tasks Feed** - Tasks with due dates
 
 **Subscribing in Google Calendar:**
 
-You can subscribe to both feeds separately:
-
-**For Events:**
 1. Open [Google Calendar](https://calendar.google.com)
 2. Click the **+** next to "Other calendars"
 3. Select **"From URL"**
-4. Paste your events feed URL: `https://attodo.app/calendar/feed/{your-did}/events.ics`
+4. Paste the feed URL from AT Todo settings
 5. Click **"Add calendar"**
-
-**For Tasks:**
-1. Click the **+** next to "Other calendars" again
-2. Select **"From URL"**
-3. Paste your tasks feed URL: `https://attodo.app/tasks/feed/{your-did}/tasks.ics`
-4. Click **"Add calendar"**
-
-Your AT Protocol events and tasks will now appear in Google Calendar and sync automatically!
+6. Repeat for the other feed if desired
 
 **Subscribing in Apple Calendar:**
 
-Subscribe to both feeds for complete coverage:
-
 1. Open Calendar app
 2. Go to **File** → **New Calendar Subscription**
-3. Paste your events feed URL, click **Subscribe**
-4. Choose auto-refresh frequency (recommended: every hour)
-5. Repeat for tasks feed URL
+3. Paste the feed URL from AT Todo settings
+4. Click **Subscribe**
+5. Choose auto-refresh frequency (recommended: every hour)
+6. Repeat for the other feed if desired
 
 **Subscribing in Outlook:**
-
-Subscribe to both feeds separately:
 
 1. Open Outlook
 2. Go to **File** → **Account Settings** → **Internet Calendars**
 3. Click **New**
-4. Paste your events feed URL, click **Add**
-5. Repeat for tasks feed URL
+4. Paste the feed URL from AT Todo settings
+5. Click **Add**
+6. Repeat for the other feed if desired
 
 **What syncs from Events Feed:**
 - ✅ Event names and descriptions

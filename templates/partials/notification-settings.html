@@ -93,6 +93,80 @@
     </label>
 
     <button onclick="saveUIPreferences()">Save UI Preferences</button>
+
+    <hr>
+
+    <h3>Calendar Subscriptions</h3>
+
+    <p style="color: var(--pico-muted-color); font-size: 0.9rem;">
+        Subscribe to your calendar events and tasks in Google Calendar, Apple Calendar, or any app that supports iCal feeds.
+    </p>
+
+    <div style="margin-top: 1rem;">
+        <h4 style="margin-bottom: 0.5rem;">📅 Calendar Events Feed</h4>
+        <p style="font-size: 0.85rem; color: var(--pico-muted-color); margin-bottom: 0.5rem;">
+            Subscribe to all your AT Protocol calendar events (from Smokesignal, etc.)
+        </p>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input
+                type="text"
+                id="events-feed-url"
+                readonly
+                value="Loading..."
+                style="flex: 1; font-family: monospace; font-size: 0.85rem; background: var(--pico-form-element-background-color); margin-bottom: 0;"
+            >
+            <button onclick="copyFeedURL('events')" class="secondary" style="white-space: nowrap; margin-bottom: 0;">
+                Copy URL
+            </button>
+        </div>
+    </div>
+
+    <div style="margin-top: 1rem;">
+        <h4 style="margin-bottom: 0.5rem;">✓ Tasks Feed</h4>
+        <p style="font-size: 0.85rem; color: var(--pico-muted-color); margin-bottom: 0.5rem;">
+            Subscribe to tasks with due dates (shows as todos in your calendar)
+        </p>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input
+                type="text"
+                id="tasks-feed-url"
+                readonly
+                value="Loading..."
+                style="flex: 1; font-family: monospace; font-size: 0.85rem; background: var(--pico-form-element-background-color); margin-bottom: 0;"
+            >
+            <button onclick="copyFeedURL('tasks')" class="secondary" style="white-space: nowrap; margin-bottom: 0;">
+                Copy URL
+            </button>
+        </div>
+    </div>
+
+    <details style="margin-top: 1rem;">
+        <summary>How to subscribe in your calendar app</summary>
+        <div style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--pico-muted-color);">
+            <p><strong>Google Calendar:</strong></p>
+            <ol style="margin-left: 1.5rem; margin-bottom: 1rem;">
+                <li>Open Google Calendar</li>
+                <li>Click the + next to "Other calendars"</li>
+                <li>Select "From URL"</li>
+                <li>Paste the feed URL and click "Add calendar"</li>
+            </ol>
+
+            <p><strong>Apple Calendar:</strong></p>
+            <ol style="margin-left: 1.5rem; margin-bottom: 1rem;">
+                <li>Open Calendar app</li>
+                <li>Go to File → New Calendar Subscription</li>
+                <li>Paste the feed URL and click Subscribe</li>
+                <li>Choose auto-refresh frequency (hourly recommended)</li>
+            </ol>
+
+            <p><strong>Outlook:</strong></p>
+            <ol style="margin-left: 1.5rem;">
+                <li>Open Outlook</li>
+                <li>Go to File → Account Settings → Internet Calendars</li>
+                <li>Click New, paste the feed URL, and click Add</li>
+            </ol>
+        </div>
+    </details>
 </article>
 
 <script>
@@ -658,8 +732,58 @@ async function registerPeriodicSync() {
 
 // Note: showToast() function is defined globally in dashboard.html
 
+// Load and populate iCal feed URLs
+async function loadFeedURLs() {
+    try {
+        // Fetch user's DID from session info
+        const response = await fetch('/app/user');
+        if (!response.ok) throw new Error('Failed to load user info');
+        const userData = await response.json();
+        const did = userData.did;
+
+        // Construct feed URLs
+        const baseURL = window.location.origin;
+        const eventsFeedURL = `${baseURL}/calendar/feed/${did}/events.ics`;
+        const tasksFeedURL = `${baseURL}/tasks/feed/${did}/tasks.ics`;
+
+        // Update input fields
+        document.getElementById('events-feed-url').value = eventsFeedURL;
+        document.getElementById('tasks-feed-url').value = tasksFeedURL;
+    } catch (error) {
+        console.error('Failed to load feed URLs:', error);
+        document.getElementById('events-feed-url').value = 'Error loading URL';
+        document.getElementById('tasks-feed-url').value = 'Error loading URL';
+    }
+}
+
+// Copy feed URL to clipboard
+async function copyFeedURL(type) {
+    const inputId = type === 'events' ? 'events-feed-url' : 'tasks-feed-url';
+    const input = document.getElementById(inputId);
+    const url = input.value;
+
+    if (url.startsWith('Loading') || url.startsWith('Error')) {
+        showToast('Feed URL not available yet', 'error');
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(url);
+        showToast(`${type === 'events' ? 'Events' : 'Tasks'} feed URL copied!`, 'success');
+    } catch (error) {
+        console.error('Failed to copy to clipboard:', error);
+        // Fallback: select the text
+        input.select();
+        document.execCommand('copy');
+        showToast('URL copied to clipboard!', 'success');
+    }
+}
+
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', initNotificationSettings);
+document.addEventListener('DOMContentLoaded', () => {
+    initNotificationSettings();
+    loadFeedURLs();
+});
 
 // Add event listener for enable button
 document.getElementById('enable-notifications')?.addEventListener('click', requestNotificationPermission);

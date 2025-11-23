@@ -161,6 +161,8 @@ func main() {
 	logRoute("GET /app/lists/view/* [protected]")
 	mux.Handle("/app/settings", authMiddleware.RequireAuth(http.HandlerFunc(settingsHandler.HandleSettings)))
 	logRoute("GET/PUT /app/settings [protected]")
+	mux.Handle("/app/user", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.GetUserInfo)))
+	logRoute("GET /app/user [protected]")
 
 	// Push notification routes
 	mux.Handle("/app/push/vapid-key", authMiddleware.RequireAuth(http.HandlerFunc(pushHandler.HandleGetVAPIDKey)))

@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/shindakun/attodo/internal/config"
+	"github.com/shindakun/attodo/internal/session"
 	"github.com/shindakun/bskyoauth"
 )
 
@@ -105,4 +107,19 @@ func (h *AuthHandler) GetSession(r *http.Request) (*bskyoauth.Session, error) {
 	}
 
 	return session, nil
+}
+
+// GetUserInfo returns basic user information (DID)
+func (h *AuthHandler) GetUserInfo(w http.ResponseWriter, r *http.Request) {
+	sess, ok := session.GetSession(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Return user info as JSON
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"did": sess.DID,
+	})
 }

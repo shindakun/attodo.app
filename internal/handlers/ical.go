@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -98,7 +99,8 @@ func (h *ICalHandler) GenerateTasksFeed(w http.ResponseWriter, r *http.Request) 
 	w.Write([]byte(ical))
 }
 
-// fetchEventsForDID fetches calendar events for a given DID using public read
+// fetchEventsForDID fetches calendar events for a given DID using public read with pagination
+// This includes both events owned by the DID and events they've RSVP'd to
 func (h *ICalHandler) fetchEventsForDID(ctx context.Context, did string) ([]*models.CalendarEvent, error) {
 	// Resolve PDS endpoint for this DID
 	pds, err := h.resolvePDSEndpoint(ctx, did)
@@ -106,17 +108,211 @@ func (h *ICalHandler) fetchEventsForDID(ctx context.Context, did string) ([]*mod
 		return nil, fmt.Errorf("failed to resolve PDS endpoint: %w", err)
 	}
 
-	// Build the XRPC URL for public read
-	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.listRecords?repo=%s&collection=%s",
-		pds, did, CalendarEventCollection)
+	client := &http.Client{Timeout: 10 * time.Second}
+	var allEvents []*models.CalendarEvent
+	cursor := ""
+	page := 0
 
-	// Create and execute request
+	// Fetch own events with pagination
+	log.Printf("fetchEventsForDID: Fetching own events for %s", did)
+	for {
+		page++
+		// Build the XRPC URL for public read with optional cursor
+		url := fmt.Sprintf("%s/xrpc/com.atproto.repo.listRecords?repo=%s&collection=%s&limit=100",
+			pds, did, CalendarEventCollection)
+		if cursor != "" {
+			url += "&cursor=" + cursor
+		}
+
+		log.Printf("fetchEventsForDID: Fetching own events page %d (cursor: %s)", page, cursor)
+
+		// Create and execute request
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("XRPC error %d", resp.StatusCode)
+		}
+
+		// Parse response with cursor support
+		var result struct {
+			Records []struct {
+				Uri   string                 `json:"uri"`
+				Cid   string                 `json:"cid"`
+				Value map[string]interface{} `json:"value"`
+			} `json:"records"`
+			Cursor string `json:"cursor,omitempty"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, err
+		}
+
+		log.Printf("fetchEventsForDID: Own events page %d returned %d records", page, len(result.Records))
+
+		// Convert to CalendarEvent models
+		for _, record := range result.Records {
+			event, err := models.ParseCalendarEvent(record.Value, record.Uri, record.Cid)
+			if err != nil {
+				// Skip invalid events but don't fail the whole feed
+				log.Printf("fetchEventsForDID: Skipping invalid event %s: %v", record.Uri, err)
+				continue
+			}
+			log.Printf("fetchEventsForDID: Parsed event '%s' starting at %v", event.Name, event.StartsAt)
+			allEvents = append(allEvents, event)
+		}
+
+		// Check if there are more pages
+		if result.Cursor == "" {
+			log.Printf("fetchEventsForDID: No more own event pages, total own events: %d", len(allEvents))
+			break
+		}
+		cursor = result.Cursor
+	}
+
+	// Now fetch RSVP'd events
+	log.Printf("fetchEventsForDID: Fetching RSVP'd events for %s", did)
+	rsvpEvents, err := h.fetchEventsFromRSVPs(ctx, did, pds, client)
+	if err != nil {
+		// Don't fail if RSVP fetch fails, just log it
+		log.Printf("fetchEventsForDID: Failed to fetch RSVP'd events: %v", err)
+	} else {
+		log.Printf("fetchEventsForDID: Found %d RSVP'd events", len(rsvpEvents))
+		allEvents = append(allEvents, rsvpEvents...)
+	}
+
+	log.Printf("fetchEventsForDID: Successfully fetched %d total events (%d own + %d RSVP'd)",
+		len(allEvents), len(allEvents)-len(rsvpEvents), len(rsvpEvents))
+	return allEvents, nil
+}
+
+// fetchEventsFromRSVPs fetches events that the user has RSVP'd to
+func (h *ICalHandler) fetchEventsFromRSVPs(ctx context.Context, did, pds string, client *http.Client) ([]*models.CalendarEvent, error) {
+	var rsvpEvents []*models.CalendarEvent
+	cursor := ""
+	page := 0
+
+	// Fetch all RSVPs with pagination
+	for {
+		page++
+		url := fmt.Sprintf("%s/xrpc/com.atproto.repo.listRecords?repo=%s&collection=%s&limit=100",
+			pds, did, CalendarRSVPCollection)
+		if cursor != "" {
+			url += "&cursor=" + cursor
+		}
+
+		log.Printf("fetchEventsFromRSVPs: Fetching RSVP page %d (cursor: %s)", page, cursor)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("XRPC error %d fetching RSVPs", resp.StatusCode)
+		}
+
+		var result struct {
+			Records []struct {
+				Uri   string                 `json:"uri"`
+				Cid   string                 `json:"cid"`
+				Value map[string]interface{} `json:"value"`
+			} `json:"records"`
+			Cursor string `json:"cursor,omitempty"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, err
+		}
+
+		log.Printf("fetchEventsFromRSVPs: RSVP page %d returned %d records", page, len(result.Records))
+
+		// For each RSVP, fetch the actual event
+		for _, record := range result.Records {
+			// Extract the event URI from the RSVP subject
+			subject, ok := record.Value["subject"].(map[string]interface{})
+			if !ok {
+				log.Printf("fetchEventsFromRSVPs: Skipping RSVP with invalid subject")
+				continue
+			}
+
+			eventURI, ok := subject["uri"].(string)
+			if !ok {
+				log.Printf("fetchEventsFromRSVPs: Skipping RSVP with missing event URI")
+				continue
+			}
+
+			log.Printf("fetchEventsFromRSVPs: Fetching event from RSVP: %s", eventURI)
+
+			// Fetch the event from the other user's repository
+			event, err := h.fetchEventByURI(ctx, eventURI, client)
+			if err != nil {
+				log.Printf("fetchEventsFromRSVPs: Failed to fetch event %s: %v", eventURI, err)
+				continue
+			}
+
+			rsvpEvents = append(rsvpEvents, event)
+		}
+
+		// Check if there are more pages
+		if result.Cursor == "" {
+			log.Printf("fetchEventsFromRSVPs: No more RSVP pages, total RSVP'd events: %d", len(rsvpEvents))
+			break
+		}
+		cursor = result.Cursor
+	}
+
+	return rsvpEvents, nil
+}
+
+// fetchEventByURI fetches a single event by its AT URI
+func (h *ICalHandler) fetchEventByURI(ctx context.Context, uri string, client *http.Client) (*models.CalendarEvent, error) {
+	// Parse the URI: at://did:plc:xxx/community.lexicon.calendar.event/rkey
+	if !strings.HasPrefix(uri, "at://") {
+		return nil, fmt.Errorf("invalid AT URI: %s", uri)
+	}
+
+	// Extract DID and rkey from URI
+	parts := strings.Split(strings.TrimPrefix(uri, "at://"), "/")
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("malformed AT URI: %s", uri)
+	}
+
+	eventDID := parts[0]
+	collection := parts[1]
+	rkey := parts[2]
+
+	log.Printf("fetchEventByURI: Fetching event %s from %s", rkey, eventDID)
+
+	// Resolve PDS for the event's DID
+	pds, err := h.resolvePDSEndpoint(ctx, eventDID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve PDS for %s: %w", eventDID, err)
+	}
+
+	// Fetch the event record
+	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.getRecord?repo=%s&collection=%s&rkey=%s",
+		pds, eventDID, collection, rkey)
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -124,34 +320,27 @@ func (h *ICalHandler) fetchEventsForDID(ctx context.Context, did string) ([]*mod
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("XRPC error %d", resp.StatusCode)
+		return nil, fmt.Errorf("XRPC error %d fetching event", resp.StatusCode)
 	}
 
-	// Parse response (reuse the same struct from calendar.go)
 	var result struct {
-		Records []struct {
-			Uri   string                 `json:"uri"`
-			Cid   string                 `json:"cid"`
-			Value map[string]interface{} `json:"value"`
-		} `json:"records"`
+		Uri   string                 `json:"uri"`
+		Cid   string                 `json:"cid"`
+		Value map[string]interface{} `json:"value"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
 
-	// Convert to CalendarEvent models
-	events := make([]*models.CalendarEvent, 0, len(result.Records))
-	for _, record := range result.Records {
-		event, err := models.ParseCalendarEvent(record.Value, record.Uri, record.Cid)
-		if err != nil {
-			// Skip invalid events but don't fail the whole feed
-			continue
-		}
-		events = append(events, event)
+	// Parse the event
+	event, err := models.ParseCalendarEvent(result.Value, result.Uri, result.Cid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse event: %w", err)
 	}
 
-	return events, nil
+	log.Printf("fetchEventByURI: Successfully fetched event '%s' starting at %v", event.Name, event.StartsAt)
+	return event, nil
 }
 
 // resolvePDSEndpoint resolves the PDS endpoint for a given DID
@@ -172,6 +361,7 @@ func (h *ICalHandler) resolvePDSEndpoint(ctx context.Context, did string) (strin
 
 // generateCalendarICalendar generates an iCal format string from calendar events
 func (h *ICalHandler) generateCalendarICalendar(did string, events []*models.CalendarEvent) string {
+	log.Printf("generateCalendarICalendar: Generating iCal for %d events", len(events))
 	var ical strings.Builder
 
 	// iCal header
@@ -184,13 +374,15 @@ func (h *ICalHandler) generateCalendarICalendar(did string, events []*models.Cal
 	ical.WriteString("METHOD:PUBLISH\r\n")
 
 	// Add each event
-	for _, event := range events {
+	for i, event := range events {
+		log.Printf("generateCalendarICalendar: Adding event %d/%d: '%s'", i+1, len(events), event.Name)
 		h.addEventToICalendar(&ical, event)
 	}
 
 	// iCal footer
 	ical.WriteString("END:VCALENDAR\r\n")
 
+	log.Printf("generateCalendarICalendar: iCal generation complete, size: %d bytes", ical.Len())
 	return ical.String()
 }
 
@@ -255,7 +447,7 @@ func (h *ICalHandler) addEventToICalendar(ical *strings.Builder, event *models.C
 	ical.WriteString("END:VEVENT\r\n")
 }
 
-// fetchTasksForDID fetches tasks for a given DID using public read
+// fetchTasksForDID fetches tasks for a given DID using public read with pagination
 func (h *ICalHandler) fetchTasksForDID(ctx context.Context, did string) ([]*models.Task, error) {
 	// Resolve PDS endpoint for this DID
 	pds, err := h.resolvePDSEndpoint(ctx, did)
@@ -263,54 +455,78 @@ func (h *ICalHandler) fetchTasksForDID(ctx context.Context, did string) ([]*mode
 		return nil, fmt.Errorf("failed to resolve PDS endpoint: %w", err)
 	}
 
-	// Build the XRPC URL for public read
-	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.listRecords?repo=%s&collection=%s",
-		pds, did, TaskCollection)
-
-	// Create and execute request
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	var allTasks []*models.Task
+	cursor := ""
+	page := 0
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("XRPC error %d", resp.StatusCode)
-	}
-
-	// Parse response
-	var result struct {
-		Records []struct {
-			Uri   string                 `json:"uri"`
-			Cid   string                 `json:"cid"`
-			Value map[string]interface{} `json:"value"`
-		} `json:"records"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Convert to Task models and filter for tasks with due dates
-	tasks := make([]*models.Task, 0)
-	for _, record := range result.Records {
-		task := parseTaskFieldsForICal(record.Value)
-		task.URI = record.Uri
-		task.RKey = extractRKeyForICal(record.Uri)
-
-		// Only include tasks with due dates
-		if task.DueDate != nil {
-			tasks = append(tasks, &task)
+	// Fetch all pages
+	for {
+		page++
+		// Build the XRPC URL for public read with optional cursor
+		url := fmt.Sprintf("%s/xrpc/com.atproto.repo.listRecords?repo=%s&collection=%s&limit=100",
+			pds, did, TaskCollection)
+		if cursor != "" {
+			url += "&cursor=" + cursor
 		}
+
+		log.Printf("fetchTasksForDID: Fetching page %d (cursor: %s)", page, cursor)
+
+		// Create and execute request
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("XRPC error %d", resp.StatusCode)
+		}
+
+		// Parse response with cursor support
+		var result struct {
+			Records []struct {
+				Uri   string                 `json:"uri"`
+				Cid   string                 `json:"cid"`
+				Value map[string]interface{} `json:"value"`
+			} `json:"records"`
+			Cursor string `json:"cursor,omitempty"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, err
+		}
+
+		log.Printf("fetchTasksForDID: Page %d returned %d records", page, len(result.Records))
+
+		// Convert to Task models and filter for tasks with due dates
+		for _, record := range result.Records {
+			task := parseTaskFieldsForICal(record.Value)
+			task.URI = record.Uri
+			task.RKey = extractRKeyForICal(record.Uri)
+
+			// Only include tasks with due dates
+			if task.DueDate != nil {
+				log.Printf("fetchTasksForDID: Adding task '%s' with due date %v", task.Title, task.DueDate)
+				allTasks = append(allTasks, &task)
+			}
+		}
+
+		// Check if there are more pages
+		if result.Cursor == "" {
+			log.Printf("fetchTasksForDID: No more pages, total tasks with due dates: %d", len(allTasks))
+			break
+		}
+		cursor = result.Cursor
 	}
 
-	return tasks, nil
+	log.Printf("fetchTasksForDID: Successfully parsed %d tasks with due dates across %d pages", len(allTasks), page)
+	return allTasks, nil
 }
 
 // generateTasksICalendar generates an iCal format string from tasks
