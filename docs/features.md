@@ -12,6 +12,7 @@ Comprehensive guide to all AT Todo features and how to use them effectively.
 - [User Interface Preferences](#user-interface-preferences)
 - [Notifications](#notifications)
 - [Lists](#lists)
+- [Calendar Events](#calendar-events)
 - [Progressive Web App](#progressive-web-app)
 
 ---
@@ -502,6 +503,269 @@ Each device needs to be registered separately to receive notifications:
 4. Share with anyone
 
 **Shared lists are public** - anyone with the link can view tasks in that list (but not edit them).
+
+---
+
+## Calendar Events
+
+AT Todo integrates with the AT Protocol calendar ecosystem, allowing you to view calendar events created by other calendar applications like [Smokesignal](https://smokesignal.events).
+
+### What are Calendar Events?
+
+Calendar events are social events stored in the AT Protocol using the `community.lexicon.calendar.event` lexicon. Unlike tasks (which are personal todo items), calendar events are typically:
+
+- **Public or shared**: Visible to others in the AT Protocol network
+- **Time-specific**: Have defined start/end times
+- **Social**: Support RSVPs and attendance tracking
+- **External**: Created by dedicated calendar apps like Smokesignal
+
+### Viewing Calendar Events
+
+**Access calendar events:**
+1. Navigate to the **📅 Events** tab in your dashboard
+2. Choose between two views:
+   - **Upcoming Events**: Shows events in the next 7 days
+   - **All Events**: Shows all calendar events
+
+**Event display includes:**
+- 📅 Event name and description
+- 🕐 Start and end times (in your local timezone)
+- 📍 Location information (for in-person events)
+- 💻 Attendance mode (Virtual, In Person, or Hybrid)
+- 🔗 Links to related resources
+- 💨 Direct link to view on Smokesignal
+
+### Event Details
+
+**View detailed information:**
+1. Click "View Details" on any event card
+2. A modal opens showing:
+   - Full event description
+   - Complete date/time information
+   - Event status (Planned, Scheduled, Rescheduled, Cancelled)
+   - Location details with addresses
+   - Attendance mode with visual indicators
+   - Related URLs and resources
+   - Your personal RSVP status (if you've RSVP'd)
+   - Link to view all RSVPs on Smokesignal
+
+**Visual indicators:**
+- 💻 **Virtual**: Online-only events
+- 📍 **In Person**: Physical location events
+- 🔄 **Hybrid**: Both online and in-person options
+
+### Event Sources
+
+AT Todo displays events from two sources:
+
+1. **Your own events**: Calendar events in your AT Protocol repository
+2. **RSVP'd events**: Events you've RSVP'd to via calendar apps
+
+All events are read-only in AT Todo. To create or manage events, use a dedicated calendar app like [Smokesignal](https://smokesignal.events).
+
+### Calendar Notifications
+
+Stay informed about upcoming events with automatic notifications.
+
+**Enabling calendar notifications:**
+1. Open Settings
+2. Scroll to "Calendar Notification Settings"
+3. Toggle "Enable calendar event notifications"
+4. Set your preferred lead time (default: 1 hour before event)
+5. Ensure push notifications are enabled
+
+**Notification timing:**
+- Choose how far in advance to be notified (e.g., "1h", "30m", "2h")
+- Notifications sent when events fall within your lead time window
+- Default: 1 hour before event start time
+- Respects quiet hours settings
+
+**What you'll receive:**
+```
+Upcoming Event: Community Meetup
+💻 Virtual event starts in 1 hour
+```
+
+**Smart notification features:**
+- ✅ Shows event mode (Virtual/In-Person/Hybrid)
+- ✅ Calculates time until event starts
+- ✅ Links to Smokesignal for full details
+- ✅ Sent to all registered devices
+- ✅ Won't spam (24-hour cooldown per event)
+
+**Notification frequency:**
+Calendar events are checked every 30 minutes for upcoming events (separate from task notifications which run every 5 minutes).
+
+### RSVPs and Attendance
+
+**Viewing your RSVP:**
+- Open event details to see your RSVP status
+- Status indicators:
+  - ✓ **Going** (green)
+  - ⓘ **Interested** (blue)
+  - ✗ **Not Going** (red)
+
+**Managing RSVPs:**
+RSVPs are managed through calendar applications like Smokesignal. AT Todo displays your RSVP status but doesn't provide RSVP functionality.
+
+**To RSVP to an event:**
+1. Click the 💨 Smokesignal link in the event details
+2. RSVP on Smokesignal
+3. Your RSVP status will appear in AT Todo automatically
+
+### Event Status Badges
+
+Events display status badges to indicate their current state:
+
+- **Scheduled** (green): Confirmed and finalized
+- **Planned** (blue): Created but not yet finalized
+- **Rescheduled** (orange): Date/time has been changed
+- **Cancelled** (red): Event has been cancelled
+- **Postponed** (red): Event delayed with no new date
+
+Cancelled and postponed events still appear in your calendar but are clearly marked.
+
+### Integration with Smokesignal
+
+AT Todo integrates seamlessly with [Smokesignal](https://smokesignal.events), the premier AT Protocol calendar application.
+
+**Smokesignal features:**
+- Create and manage calendar events
+- RSVP to events
+- View all RSVPs and attendees
+- Share event links
+- Event discovery and search
+
+**Quick access:**
+- Click the 💨 emoji next to any event name
+- Opens the event directly on Smokesignal
+- View full attendee list
+- Manage your RSVP
+- Share event with others
+
+### Google Calendar & iCal Subscription
+
+Subscribe to your AT Protocol calendar events **and tasks** in Google Calendar, Apple Calendar, Outlook, or any calendar app that supports iCal feeds.
+
+**Getting your iCal feed URLs:**
+
+AT Todo provides two separate feeds:
+
+**Calendar Events Feed:**
+```
+https://attodo.app/calendar/feed/{your-did}/events.ics
+```
+
+**Tasks Feed (tasks with due dates):**
+```
+https://attodo.app/tasks/feed/{your-did}/tasks.ics
+```
+
+To find your DID:
+1. Open AT Todo and navigate to the 📅 Events tab
+2. Open your browser's developer console (F12)
+3. Your DID appears in the console when loading events, or
+4. Check your AT Protocol profile on Bluesky
+
+**Subscribing in Google Calendar:**
+
+You can subscribe to both feeds separately:
+
+**For Events:**
+1. Open [Google Calendar](https://calendar.google.com)
+2. Click the **+** next to "Other calendars"
+3. Select **"From URL"**
+4. Paste your events feed URL: `https://attodo.app/calendar/feed/{your-did}/events.ics`
+5. Click **"Add calendar"**
+
+**For Tasks:**
+1. Click the **+** next to "Other calendars" again
+2. Select **"From URL"**
+3. Paste your tasks feed URL: `https://attodo.app/tasks/feed/{your-did}/tasks.ics`
+4. Click **"Add calendar"**
+
+Your AT Protocol events and tasks will now appear in Google Calendar and sync automatically!
+
+**Subscribing in Apple Calendar:**
+
+Subscribe to both feeds for complete coverage:
+
+1. Open Calendar app
+2. Go to **File** → **New Calendar Subscription**
+3. Paste your events feed URL, click **Subscribe**
+4. Choose auto-refresh frequency (recommended: every hour)
+5. Repeat for tasks feed URL
+
+**Subscribing in Outlook:**
+
+Subscribe to both feeds separately:
+
+1. Open Outlook
+2. Go to **File** → **Account Settings** → **Internet Calendars**
+3. Click **New**
+4. Paste your events feed URL, click **Add**
+5. Repeat for tasks feed URL
+
+**What syncs from Events Feed:**
+- ✅ Event names and descriptions
+- ✅ Start and end times (in your timezone)
+- ✅ Location information
+- ✅ Event status (confirmed, tentative, cancelled)
+- ✅ Links to Smokesignal
+- ✅ Event mode (virtual/in-person/hybrid) as categories
+
+**What syncs from Tasks Feed:**
+- ✅ Task titles and descriptions
+- ✅ Due dates (in your timezone)
+- ✅ Completion status
+- ✅ Tags as categories
+- ✅ Only tasks with due dates (no due date = not included)
+
+**Auto-refresh:**
+- Calendar apps check for updates periodically
+- Google Calendar: Every few hours
+- Apple Calendar: Configurable (hourly recommended)
+- Outlook: Configurable
+
+**Privacy note:**
+Calendar events and tasks in AT Protocol are public by design. Anyone with your iCal feed URLs can view your events and tasks. This is the same as viewing them on Smokesignal or other AT Protocol apps.
+
+**Tips:**
+- Subscribe to both feeds to see your complete schedule in one place
+- Tasks appear as "todos" in most calendar apps
+- Completed tasks remain in the feed with completion status
+- Use separate calendar colors to distinguish events from tasks
+
+### Event Timezone Handling
+
+All event times are automatically converted to your local timezone:
+- **Displayed**: In your browser's timezone
+- **Stored**: In UTC in AT Protocol
+- **Notifications**: Respect your local time
+- **Created date**: Shows when the event was created (in local time)
+
+### Read-Only Access
+
+**Important notes:**
+- 📖 Calendar events in AT Todo are **read-only**
+- ✏️ To create or edit events, use a calendar app like Smokesignal
+- 🔄 AT Todo automatically syncs events from your AT Protocol repository
+- 📅 Perfect for viewing your event schedule alongside your tasks
+
+### Calendar Best Practices
+
+**Organizing your calendar:**
+1. **Use Smokesignal** for event creation and management
+2. **View in AT Todo** to see events alongside tasks
+3. **Enable notifications** to stay informed
+4. **RSVP on Smokesignal** to indicate attendance
+5. **Share event links** from Smokesignal with others
+
+**Integrating with tasks:**
+- Create tasks for event preparation (e.g., "Prepare presentation for Monday meetup")
+- Use tags to link tasks to events (e.g., #meetup, #conference)
+- Set task due dates relative to event times
+- Enable both task and calendar notifications
 
 ---
 

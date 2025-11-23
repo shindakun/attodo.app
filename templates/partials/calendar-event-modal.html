@@ -1,0 +1,54 @@
+{{define "calendar-event-modal.html"}}
+<!-- Event Detail Modal -->
+<dialog id="event-detail-modal">
+    <article style="width: 90vw; max-width: 600px;">
+        <header>
+            <button aria-label="Close" rel="prev" onclick="document.getElementById('event-detail-modal').close()"></button>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+                <h3 id="event-modal-title" style="margin: 0; flex: 1;"></h3>
+                <a id="event-modal-smokesignal-link" href="#" target="_blank" rel="noopener noreferrer" title="View on Smokesignal" style="display: none; flex-shrink: 0; text-decoration: none; font-size: 24px;">
+                    💨
+                </a>
+            </div>
+        </header>
+
+        <div id="event-modal-content">
+            <!-- Status Badge -->
+            <div id="event-modal-status" style="margin-bottom: 1rem;"></div>
+
+            <!-- Description -->
+            <div id="event-modal-description" style="margin-bottom: 1rem; color: var(--pico-muted-color);"></div>
+
+            <!-- Date/Time Information -->
+            <div id="event-modal-times" style="margin-bottom: 1rem;">
+                <div id="event-modal-starts" class="event-time" style="margin-bottom: 0.5rem;"></div>
+                <div id="event-modal-ends" class="event-time"></div>
+            </div>
+
+            <!-- Mode -->
+            <div id="event-modal-mode" style="margin-bottom: 1rem;"></div>
+
+            <!-- Locations -->
+            <div id="event-modal-locations" style="margin-bottom: 1rem;"></div>
+
+            <!-- URIs/Links -->
+            <div id="event-modal-uris" style="margin-bottom: 1rem;"></div>
+
+            <!-- RSVP Information -->
+            <div id="event-modal-rsvps" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--pico-muted-border-color);">
+                <h4 style="margin-top: 0;">RSVPs</h4>
+                <div id="event-rsvp-list">
+                    <p style="color: var(--pico-muted-color); font-style: italic;">Loading RSVPs...</p>
+                </div>
+            </div>
+
+            <!-- Created Date -->
+            <div id="event-modal-created" style="margin-top: 1.5rem; font-size: 0.875rem; color: var(--pico-muted-color);"></div>
+        </div>
+
+        <footer>
+            <button class="secondary" onclick="document.getElementById('event-detail-modal').close()">Close</button>
+        </footer>
+    </article>
+</dialog>
+{{end}}

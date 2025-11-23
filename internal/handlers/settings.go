@@ -53,7 +53,7 @@ func (h *SettingsHandler) handleGetSettings(w http.ResponseWriter, r *http.Reque
 	var err error
 	sess, err = h.WithRetry(r.Context(), sess, func(s *bskyoauth.Session) error {
 		var fetchErr error
-		record, fetchErr = h.getRecord(r.Context(), s, SettingsRKey)
+		record, fetchErr = h.GetRecord(r.Context(), s, SettingsRKey)
 		return fetchErr
 	})
 
@@ -65,7 +65,7 @@ func (h *SettingsHandler) handleGetSettings(w http.ResponseWriter, r *http.Reque
 		settings = models.DefaultNotificationSettings()
 	} else {
 		// Parse existing settings
-		settings = parseSettingsRecord(record)
+		settings = ParseSettingsRecord(record)
 		settings.RKey = SettingsRKey
 		settings.URI = fmt.Sprintf("at://%s/%s/%s", sess.DID, SettingsCollection, SettingsRKey)
 	}
@@ -101,18 +101,20 @@ func (h *SettingsHandler) handleUpdateSettings(w http.ResponseWriter, r *http.Re
 
 	// Convert to map for AT Protocol
 	record := map[string]interface{}{
-		"$type":             SettingsCollection,
-		"notifyOverdue":     settings.NotifyOverdue,
-		"notifyToday":       settings.NotifyToday,
-		"notifySoon":        settings.NotifySoon,
-		"hoursBefore":       settings.HoursBefore,
-		"checkFrequency":    settings.CheckFrequency,
-		"quietHoursEnabled": settings.QuietHoursEnabled,
-		"quietStart":        settings.QuietStart,
-		"quietEnd":          settings.QuietEnd,
-		"pushEnabled":       settings.PushEnabled,
-		"taskInputCollapsed": settings.TaskInputCollapsed,
-		"updatedAt":         settings.UpdatedAt.Format(time.RFC3339),
+		"$type":                        SettingsCollection,
+		"notifyOverdue":                settings.NotifyOverdue,
+		"notifyToday":                  settings.NotifyToday,
+		"notifySoon":                   settings.NotifySoon,
+		"hoursBefore":                  settings.HoursBefore,
+		"checkFrequency":               settings.CheckFrequency,
+		"quietHoursEnabled":            settings.QuietHoursEnabled,
+		"quietStart":                   settings.QuietStart,
+		"quietEnd":                     settings.QuietEnd,
+		"pushEnabled":                  settings.PushEnabled,
+		"taskInputCollapsed":           settings.TaskInputCollapsed,
+		"calendarNotificationsEnabled": settings.CalendarNotificationsEnabled,
+		"calendarNotificationLeadTime": settings.CalendarNotificationLeadTime,
+		"updatedAt":                    settings.UpdatedAt.Format(time.RFC3339),
 	}
 
 	// Include appUsageHours if present
@@ -120,10 +122,15 @@ func (h *SettingsHandler) handleUpdateSettings(w http.ResponseWriter, r *http.Re
 		record["appUsageHours"] = settings.AppUsageHours
 	}
 
+	// Include notificationSentHistory if present
+	if settings.NotificationSentHistory != nil {
+		record["notificationSentHistory"] = settings.NotificationSentHistory
+	}
+
 	// Check if settings record already exists
 	var err error
 	sess, err = h.WithRetry(r.Context(), sess, func(s *bskyoauth.Session) error {
-		_, fetchErr := h.getRecord(r.Context(), s, SettingsRKey)
+		_, fetchErr := h.GetRecord(r.Context(), s, SettingsRKey)
 		return fetchErr
 	})
 
@@ -161,8 +168,8 @@ func (h *SettingsHandler) handleUpdateSettings(w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(settings)
 }
 
-// parseSettingsRecord parses a settings record from AT Protocol
-func parseSettingsRecord(record map[string]interface{}) *models.NotificationSettings {
+// ParseSettingsRecord parses a settings record from AT Protocol
+func ParseSettingsRecord(record map[string]interface{}) *models.NotificationSettings {
 	settings := models.DefaultNotificationSettings()
 
 	if v, ok := record["notifyOverdue"].(bool); ok {
@@ -195,6 +202,12 @@ func parseSettingsRecord(record map[string]interface{}) *models.NotificationSett
 	if v, ok := record["taskInputCollapsed"].(bool); ok {
 		settings.TaskInputCollapsed = v
 	}
+	if v, ok := record["calendarNotificationsEnabled"].(bool); ok {
+		settings.CalendarNotificationsEnabled = v
+	}
+	if v, ok := record["calendarNotificationLeadTime"].(string); ok {
+		settings.CalendarNotificationLeadTime = v
+	}
 
 	// Parse appUsageHours if present
 	if usageMap, ok := record["appUsageHours"].(map[string]interface{}); ok {
@@ -202,6 +215,16 @@ func parseSettingsRecord(record map[string]interface{}) *models.NotificationSett
 		for k, v := range usageMap {
 			if count, ok := v.(float64); ok {
 				settings.AppUsageHours[k] = int(count)
+			}
+		}
+	}
+
+	// Parse notificationSentHistory if present
+	if historyMap, ok := record["notificationSentHistory"].(map[string]interface{}); ok {
+		settings.NotificationSentHistory = make(map[string]string)
+		for k, v := range historyMap {
+			if timestamp, ok := v.(string); ok {
+				settings.NotificationSentHistory[k] = timestamp
 			}
 		}
 	}
@@ -216,8 +239,8 @@ func parseSettingsRecord(record map[string]interface{}) *models.NotificationSett
 	return settings
 }
 
-// getRecord retrieves a settings record using com.atproto.repo.getRecord
-func (h *SettingsHandler) getRecord(ctx context.Context, sess *bskyoauth.Session, rkey string) (map[string]interface{}, error) {
+// GetRecord retrieves a settings record using com.atproto.repo.getRecord
+func (h *SettingsHandler) GetRecord(ctx context.Context, sess *bskyoauth.Session, rkey string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.getRecord?repo=%s&collection=%s&rkey=%s",
 		sess.PDS, sess.DID, SettingsCollection, rkey)
 
